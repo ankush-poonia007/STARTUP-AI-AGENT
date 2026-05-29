@@ -1,8 +1,45 @@
+# tools.py
 from tavily import TavilyClient
 from dotenv import load_dotenv
 import os
 import requests 
-# tools.py
+
+"""
+user_input
+    ↓
+summarize_text()
+    ↓
+    ├──→ analyze_market() ──→ search_knowledge_base()
+    │                                   ↓
+    ├──→ suggest_mvp()              [sources for
+    │                               hallucination
+    ├──→ recommend_tech_stack()      removal]
+    │
+    └──→ risk_analysis()
+            ↓
+    All results accumulate context
+            ↓
+    LLM Final Report
+    
+1. Shared client initialized once in tools.py ✅
+
+2. Tools using Tavily — analyze_market(), search_knowledge_base()
+
+3. Tools using Groq/Gemini + prompt template — suggest_mvp(), recommend_tech_stack(), risk_analysis()
+
+4. Input flow — user_input → summarize_text() → feeds all parallel tools
+
+5. Next to build — suggest_mvp() using summarized text + prompt template
+
+6. To research — asyncio, concurrent.futures, Fan-Out Fan-In pattern
+
+7. Final Homework Before Next Session: 
+    1. Build — suggest_mvp() yourself using summarized text + prompt template
+    2. Research — asyncio for parallel execution
+    3. Write — PROGRESS.md in your project from memory
+
+
+"""
 
 load_dotenv()
 
