@@ -5,6 +5,7 @@ import os
 import requests 
 
 """
+
 user_input
     ↓
 summarize_text()
