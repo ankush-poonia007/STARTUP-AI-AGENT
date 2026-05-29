@@ -48,7 +48,11 @@ def analyze_market(startup_idea: str) -> str:
         
         message = """"""
         for result in response["results"]:
-            message += "\n" + result["content"]
+            message += "\nResult :" 
+            message += "n\Title: "+ result["title"]
+            message += "\nContent: " + result["content"]
+            message += "\nURL:"+result["url"]
+            
             
         return f"""Market Analysis Results:
     {message}"""

@@ -1,7 +1,5 @@
 # agent.py
-
 import requests
-
 from prompts import SYSTEM_PROMPT
 from context_manager import get_context
 
@@ -12,7 +10,6 @@ from tools import (
     recommend_tech_stack,
     risk_analysis
 )
-
 
 class StartupAgent:
     
