@@ -2,8 +2,10 @@
 import requests
 from prompts import SYSTEM_PROMPT
 from context_manager import get_context
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tools import (
+    summarize_text,
     search_knowledge_base,
     analyze_market,
     suggest_mvp,
@@ -45,17 +47,77 @@ class StartupAgent:
             # =================================================
             # Execute Tools
             # =================================================
+            
+            """
 
-            knowledge_results = search_knowledge_base(user_input)
+    user_input
+        ↓
+    summarize_text()
+        ↓
+        ├──→ analyze_market() ──→ search_knowledge_base()
+        │
+        └──→ suggest_mvp()
+                ↓
+        ┌───────┴────────────┐
+        ↓                    ↓
+    recommend_tech_stack()  risk_analysis()
+        └─────────┬──────────┘
+                ↓
+            LLM Final Report
+            
+"""
 
-            market_analysis = analyze_market(user_input)
+            """
+            Source citation being stripped by summarization
+            Parallel execution not implemented yet
+            concurrent.futures still to research
 
-            mvp_suggestions = suggest_mvp(user_input)
+            """
 
-            tech_stack = recommend_tech_stack()
 
-            risk_results = risk_analysis()
+            """
 
+            Group 1 — sequential
+            summarize_text() → analyze_market()
+
+            Group 2 — sequential
+            suggest_mvp()
+
+            Group 3 — parallel
+            search_knowledge_base(), recommend_tech_stack(), risk_analysis()
+
+            Group 4 — single
+            LLM Final Report
+
+            """
+            
+            
+
+            with ThreadPoolExecutor() as executor:
+                # submit tasks here
+                summarized_text = summarize_text(user_input)
+
+                market_analysis = analyze_market(summarized_text)
+                
+                mvp_suggestions = suggest_mvp(summarized_text, market_analysis)
+                
+                future ={
+                    executor.submit(search_knowledge_base, market_analysis):"knowledge",
+                    executor.submit(recommend_tech_stack, summarized_text, mvp_suggestions):"tech_stack",
+                    executor.submit(risk_analysis, summarized_text, mvp_suggestions, market_analysis ):"risk"
+                }
+                
+                for completed_future in as_completed(future):
+                    name = future[completed_future]
+                    result = completed_future.result()
+                    
+                    if name == "knowledge":
+                        knowledge_results = result
+                    elif name == "tech_stack":
+                        tech_stack = result
+                    elif name == "risk":
+                        risk_results = result
+                        
             # =================================================
             # Build Conversation Prompt
             # =================================================
@@ -89,7 +151,7 @@ TOOL RESULTS:
 
 {tech_stack}
 
-{risk_results}
+{summarize_text (risk_results)}
 
 """
 
@@ -100,7 +162,7 @@ TOOL RESULTS:
             conversation += f"""
 
 CURRENT USER INPUT:
-{user_input}
+{summarized_text}
 
 """
 
@@ -117,8 +179,8 @@ CURRENT USER INPUT:
                     "keep_alive": "30m",
                     "options": {
                         "temperature": 0.4,
-                        "num_predict": 700,
-                        "num_ctx": 4096
+                        "num_predict": 1200,
+                        "num_ctx": 6000
                     }
                 },
                 timeout=180
