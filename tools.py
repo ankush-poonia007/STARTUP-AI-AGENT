@@ -61,17 +61,14 @@ def summarize_text(text: str) -> str:
     if len(text) <= 200:
         return text
 
-    full_prompt = f"""
-    You are a professional summarizer.
-    
-    Please read the following text and provide a concise and clear summary.
-    
-    ---
-    Text to summarize:
-    {text}
-    ---
-    
-    Summary:
+    full_prompt = f"""You are a professional summarizer. 
+Please read the following text and provide a concise and clear summary.
+Also keep the mentioned source of the information you gathered for future verification and confident response Properly.
+After the summary, analyze the response to ensure it accurately matches the sources, does not cause hallucination, and maintains high quality. --- 
+
+Text to summarize: {text} --- 
+
+Summary:
     """
     
     try:
@@ -112,16 +109,15 @@ def analyze_market(startup_idea: str) -> str:
             search_depth="basic"
         )
         
-        message = """"""
+        message = {}
         for result in response["results"]:
-            message += "\nResult :" 
-            message += "\nTitle: "+ result["title"]
-            message += "\nContent: " + result["content"]
-            message += "\nURL:"+result["url"]
+            mess = """"""
+            mess += "\nResult :"
+            mess += "\nContent: " + result["content"]
+            message[result["url"]] = [result["title"],mess]
             
             
-        return f"""Market Analysis Results:
-    {message}"""
+        return message
     
     except requests.exceptions.HTTPError :
         return f"HTTP error occurred" # e.g., 404 Not Found
