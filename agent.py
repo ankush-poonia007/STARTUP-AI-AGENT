@@ -109,7 +109,7 @@ class StartupAgent:
                 
                 for completed_future in as_completed(future):
                     name = future[completed_future]
-                    result = completed_future.result()
+                    result = completed_future.result( timeout= 60 )
                     
                     if name == "knowledge":
                         knowledge_results = result

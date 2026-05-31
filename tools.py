@@ -1,4 +1,6 @@
 # tools.py
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from google.api_core import exceptions
 from google import genai
 from tavily import TavilyClient
 from dotenv import load_dotenv
@@ -53,45 +55,50 @@ gemini_client = genai.Client(api_key = GEMINI_API_KEY)
 tavily_client = TavilyClient(TAVILY_API_KEY)
 
 
-def summarize_text(text: str) -> str:
+def summarize_text(message: dict) -> str:
     """
     Basic placeholder summarizer.
     """
         
-    if len(text) <= 200:
-        return text
-
-    full_prompt = f"""You are a professional summarizer. 
+    try:
+        with ThreadPoolExecutor() as executor:
+        
+            future ={}
+            for url in message:
+                full_prompt = f"""You are a professional summarizer. 
 Please read the following text and provide a concise and clear summary.
-Also keep the mentioned source of the information you gathered for future verification and confident response Properly.
-After the summary, analyze the response to ensure it accurately matches the sources, does not cause hallucination, and maintains high quality. --- 
+--- 
 
-Text to summarize: {text} --- 
+Text to summarize: {message[url][1]} --- 
 
 Summary:
-    """
-    
-    try:
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=full_prompt
-            )
-        
-        return response.text
-    
+    """ 
+                future[executor.submit(gemini_client.models.generate_content,
+                    model="gemini-2.5-flash",
+                    contents=full_prompt
+                )] = url
+                
+            
+            response =""""""
+            
+            for complete_future in as_completed(future):
+                
+                response += f"""Title: {message[future[complete_future]][0]}
+Summary:{complete_future.result( timeout= 60 ).text}
+URL:{message[future[complete_future]]}
+"""
 
-    except requests.exceptions.HTTPError :
-        return f"HTTP error occurred" # e.g., 404 Not Found
-        
-    except requests.exceptions.ConnectionError:
-        return "Connection error: Check your internet or server URL."
+        return response
     
-    except requests.exceptions.Timeout:
-        return  "Timeout error: The server took too long to respond."
+    except exceptions.ResourceExhausted as e:
+        return f"Rate Limited (429): Backing off request loops. Details: {e}"
     
-    except requests.exceptions.RequestException :
-        return f"An unexpected error occurred"
-
+    except exceptions.Unauthenticated as e:
+        return f"Auth Error (401): Check system environment API keys. Details: {e}"
+    
+    except exceptions.GoogleAPICallError as e:
+        return f"Generic API Error: {e.code} - {e.message}"
+    
     except ValueError as e:
         return f"Configuration Error: {e}"
 
