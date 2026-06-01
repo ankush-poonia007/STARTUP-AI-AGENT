@@ -63,6 +63,8 @@ Phase 5 📋 Planned
 - [x] **Multi-Provider Architecture** — Groq for fast reasoning, Gemini for analysis tools, Tavily for web search. Each provider used for what it does best.
 - [x] **Tavily Search API** — `include_answer`, `search_depth`, `exclude_domains`, `country` parameters. Returns structured results with title, content, and URL.
 - [x] **Provider-Specific Error Handling** — Each API has its own exception types. Groq: `AuthenticationError`, `RateLimitError`. Gemini: `ResourceExhausted`, `Unauthenticated`.
+- [x] **Chain of Thoughts** - Technique that prompts language models to break down complex problems into smaller, intermediate steps of reasoning before providing an answer.
+- [x] **Preprocessing** - Instead of just cleaning a static dataset for training, preprocessing in an agentic workflow involves preparing dynamic, real-time inputs so an autonomous AI agent can reason, plan, and take the correct actions.
 
 ### Mistakes Made & Fixed
 
