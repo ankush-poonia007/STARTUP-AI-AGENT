@@ -75,7 +75,7 @@ bizradar-ai/
 ---
 ## ReAct Pattern
 
-![ReAct Image](/react_pattern_architecture.svg)
+![ReAct Image](/ReAct_pattern_architecture.svg)
 ---
 ## 🏗️ Architecture
 
