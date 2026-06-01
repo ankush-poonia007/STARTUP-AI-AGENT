@@ -186,7 +186,7 @@ Orchestrator Agent
 ## 🎯 Skills Unlocked Per Phase
 
 | Skill | Phase Unlocked |
-|---|---|
+|----|----|
 | Prompt Engineering | Phase 1 |
 | Context Management | Phase 1 |
 | Local LLM Deployment | Phase 1 |
