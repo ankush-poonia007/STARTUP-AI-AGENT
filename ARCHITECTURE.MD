@@ -229,7 +229,7 @@ This rule forces the LLM to use Tavily's URLs as citations — reducing hallucin
 ## ⚖️ Tradeoffs & Known Limitations
 
 | Decision | Benefit | Tradeoff |
-|---|---|---|
+|----|----|----|
 | Groq over local Ollama | 10x faster inference | Requires internet + API key |
 | `ThreadPoolExecutor` over `asyncio` | Simpler code, works with sync libraries | Not truly async, GIL limitations |
 | In-memory context | Zero setup, fast | Lost on process exit |
