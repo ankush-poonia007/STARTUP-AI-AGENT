@@ -2,3 +2,5 @@ _env
 .env
 __pycache__/
 *.pyc
+.vscode
+_vscode
