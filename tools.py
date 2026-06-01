@@ -111,6 +111,7 @@ def analyze_market(startup_idea: str) -> str:
     """
     Analyze market potential for a startup idea.
     """
+    
     try :
         response = tavily_client.search(
             query=startup_idea,
@@ -156,7 +157,6 @@ def search_knowledge_base(query: str) -> str:
     Simulated knowledge base search.
     """
 
-    
     try :
         response = tavily_client.search(
                 query = query,
