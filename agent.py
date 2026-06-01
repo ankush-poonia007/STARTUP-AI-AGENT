@@ -28,7 +28,6 @@ client = Groq(
 
 class StartupAgent:
     
-    
     def __init__( self, model_name="llama-3.3-70b-versatile"):
         self.model_name = model_name
         self.messages = []
@@ -64,8 +63,6 @@ class StartupAgent:
             self.messages.append( {"role": "user", "content": user_input} )
             
             
-
-
             while True:
                 # make the API call with messages and tools
                 response = client.chat.completions.create(
@@ -111,38 +108,39 @@ class StartupAgent:
                                 }
                         )
                     self.future.clear()
+                    
                 else:
                     
                     return response_message.content
             
 
+        # Handle bad API keys (401)
         except AuthenticationError as e:
-    # Handle bad API keys (401)
            return f"Authentication failed. Check your API key. Details: {e}"
 
+        # Handle bad model names or wrong URLs (404)
         except NotFoundError as e:
-            # Handle bad model names or wrong URLs (404)
             return f"Resource not found. Check the model ID string. Details: {e}"
 
+        # Handle rate limiting (429)
         except RateLimitError as e:
-            # Handle rate limiting (429)
             return f"Rate limit exceeded. Implement backoff retry. Details: {e}"
 
+        # Handle invalid payload schema / parameters (400)
         except BadRequestError as e:
-            # Handle invalid payload schema / parameters (400)
             return f"Invalid request parameters. Details: {e}"
 
+        # Catch-all for other non-success HTTP status codes (e.g., 403, 500)
         except APIStatusError as e:
-            # Catch-all for other non-success HTTP status codes (e.g., 403, 500)
             return f"Groq API returned an error status ({e.status_code}): {e.message}"
 
+        # Network issues, DNS failures, or connection timeouts
         except APIConnectionError as e:
-            # Network issues, DNS failures, or connection timeouts
             return f"Failed to connect to Groq servers: {e}"
         
+        # Global Exception Call
         except Exception as error:
-
-                    return f"""
+            return f"""
 ❌ Agent Error
 
 Details:
