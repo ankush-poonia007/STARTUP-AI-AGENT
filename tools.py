@@ -106,6 +106,7 @@ URL:{message[future[complete_future]]}
         return f"An unexpected error occurred: {e}"
 
 
+# Tavily API Search Web Browser
 def analyze_market(startup_idea: str) -> str:
     """
     Analyze market potential for a startup idea.
@@ -113,8 +114,12 @@ def analyze_market(startup_idea: str) -> str:
     try :
         response = tavily_client.search(
             query=startup_idea,
-            search_depth="basic"
+            include_answer="advanced",
+            search_depth="basic",
+            country="india",
+            exclude_domains=["facebook.com", "x.com", "instagram.com"]
         )
+
         
         message = {}
         for result in response["results"]:
@@ -145,33 +150,30 @@ def analyze_market(startup_idea: str) -> str:
         return f"An unexpected error occurred: {e}"
 
 
+# Tavily API Search Web Browser
 def search_knowledge_base(query: str) -> str:
     """
     Simulated knowledge base search.
     """
 
-    new_query =  f"""
-Knowledge Base Results for Project :
-- Found related insights for '{query}'
-- Similar startup trends detected
-- Moderate market opportunity identified
-"""
+    
     try :
         response = tavily_client.search(
-                query = new_query,
-                search_depth = "basic"
+                query = query,
+                include_answer="advanced",
+                search_depth = "advanced",
+                country="india",
+                exclude_domains=["facebook.com", "x.com", "instagram.com"]
             )
         
-        message = """"""
+        message = {}
         for result in response["results"]:
-                message += "\nResult :" 
-                message += "\nTitle: "+ result["title"]
-                message += "\nContent: " + result["content"]
-                message += "\nURL:"+result["url"]
+            mess = """"""
+            mess += "\nResult :"
+            mess += "\nContent: " + result["content"]
+            message[result["url"]] = [result["title"],mess]
         
-        return f"""Search Knowledge Base Result :
-    {message}
-    """
+        return message
     
     except requests.exceptions.HTTPError :
         return f"HTTP error occurred" # e.g., 404 Not Found
@@ -192,10 +194,10 @@ Knowledge Base Results for Project :
         return f"An unexpected error occurred: {e}"
 
 
-def suggest_mvp(startup_idea: str, market_analysis:str) -> str:
+def suggest_mvp(startup_idea: str) -> str:
 
     full_prompt = f"""You are a startup advisor. Based on this idea: {startup_idea},
-Market Analysis: {market_analysis}, 
+Market Analysis:...., 
 Suggest the most essential MVP features that can be built 
 in under 3 months with a small team. Focus on core value 
 delivery only."""
@@ -229,10 +231,10 @@ delivery only."""
         
 
 
-def recommend_tech_stack(startup_idea:str, mvp_suggestions:str) -> str:
+def recommend_tech_stack(startup_idea:str,) -> str:
 
     full_prompt= f"""You are an expert Chief Technology Officer (CTO) and software architect.
-Based on this startup idea: {startup_idea} and these specific MVP suggestions: {mvp_suggestions},
+Based on this startup idea: {startup_idea},
 Recommend a lean tech stack that allows a small team to launch in under 3 months.
 Focus entirely on speed to market, ease of development, scalability, and minimal maintenance overhead.
 """
@@ -265,10 +267,10 @@ Focus entirely on speed to market, ease of development, scalability, and minimal
         return f"An unexpected error occurred: {e}"
 
 
-def risk_analysis(idea:str, mvp_suggestions:str, market_analysis:str) -> str:
+def risk_analysis(idea:str) -> str:
 
     full_prompt = f"""You are a startup risk management expert and venture analyst.
-Based on this startup idea: {idea}, these MVP features: {mvp_suggestions}, and this market analysis: {market_analysis},
+Based on this startup idea: {idea},  MVP features and  market analysis,
 Conduct a rigorous risk analysis for launching this product. Focus on identifying fatal flaws and hidden bottlenecks,
 and provide clear, actionable mitigation strategies for a small team.
 """
