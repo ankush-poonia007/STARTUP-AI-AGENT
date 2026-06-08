@@ -1,2 +1,14 @@
-requests
-python-dotenv
+# ── Core ──────────────────────────────────────────────
+python-dotenv>=1.0.0        # Environment variable management
+requests>=2.31.0            # HTTP error handling in tools.py
+
+# ── LLM Providers ─────────────────────────────────────
+groq>=0.9.0                 # Groq LPU inference — Llama 3.3 70B
+google-genai>=1.0.0         # Gemini 2.5 Flash + text-embedding-004
+
+# ── Web Search ────────────────────────────────────────
+tavily-python>=0.3.0        # Tavily Search API — real-time market research
+
+# ── RAG Pipeline ──────────────────────────────────────
+chromadb>=0.5.0             # Persistent vector store
+pdfplumber>=0.10.0          # PDF text extraction
