@@ -1,11 +1,35 @@
-_env
+# ── Secrets ───────────────────────────────────────────
 .env
-__pycache__/
-*.pyc
-.vscode
-_vscode
-template.md
+_env
+
+# ── Personal / Local Only ─────────────────────────────
 notes.txt
 REVISION_GUIDE.md
-database/chroma_db/
 Phase4.md
+template.md
+
+# ── Database ──────────────────────────────────────────
+database/
+database/chroma_db/
+
+# ── Python Cache ──────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ── Virtual Environments ──────────────────────────────
+venv/
+.venv/
+env/
+
+# ── IDE ───────────────────────────────────────────────
+.vscode/
+_vscode/
+.idea/
+
+# ── Build / Package ───────────────────────────────────
+dist/
+build/
+*.egg-info/
