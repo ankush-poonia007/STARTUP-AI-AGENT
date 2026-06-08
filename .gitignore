@@ -4,3 +4,8 @@ __pycache__/
 *.pyc
 .vscode
 _vscode
+template.md
+notes.txt
+REVISION_GUIDE.md
+database/chroma_db/
+Phase4.md

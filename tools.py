@@ -7,6 +7,12 @@ from dotenv import load_dotenv
 import os
 import requests 
 
+from rag import (
+    query_rag,
+    embed_and_store,
+    ingest_pdf
+)
+
 """
 
     user_input
@@ -85,7 +91,7 @@ Summary:
                 
                 response += f"""Title: {message[future[complete_future]][0]}
 Summary:{complete_future.result( timeout= 60 ).text}
-URL:{message[future[complete_future]]}
+URL:{future[complete_future]} 
 """
 
         return response
@@ -301,3 +307,14 @@ and provide clear, actionable mitigation strategies for a small team.
 
     except Exception as e:
         return f"An unexpected error occurred: {e}"
+
+
+# A new tool called `search_documents` that calls `query_rag()`
+def search_documents(user_input: str):
+    print("calling search_document tool...")
+    search_response = query_rag(user_input)
+    
+    if not search_response:
+        return "No data found. The file does not exist. Please check the file connection."
+    
+    return search_response
