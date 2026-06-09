@@ -3,10 +3,22 @@
 All notable changes to BizRadar AI are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
+---
+## [v3.1.0] — 2026-06-09 — Tool Context & Exception Fixes
+
+### Added
+- `market_context` parameter to `suggest_mvp()` — injects live market research into MVP prompt for deeper, grounded output
+- `market_context` parameter to `recommend_tech_stack()` — injects market conditions into stack recommendation prompt
+- `market_context` and `mvp_context` parameters to `risk_analysis()` — risk assessment now aware of both market state and MVP scope
+- Precondition instructions in `tools_description.py` for `suggest_mvp()`, `recommend_tech_stack()`, `risk_analysis()` — LLM now knows these tools require upstream context before being called
+- When-to-call instruction added to `summarize_text()` description
+
+### Fixed
+- `suggest_mvp()`, `recommend_tech_stack()`, `risk_analysis()` were using `requests.exceptions` handlers — these tools use the Gemini client which raises `google.api_core.exceptions`, not `requests.exceptions`. Replaced with correct exception types.
 
 ---
 
-## [v3.0.0] — 2026-06-08 — Phase 3 Complete
+## [v3.0.0] — 2026-06-08 — Phase 3
 
 ### Added
 - `rag.py` — complete RAG pipeline built from scratch

@@ -129,8 +129,33 @@ Phase 6 📋 Planned
 | Jumping to code before reasoning | Attempted to write functions before designing input/output/steps | Enforced flowchart-first rule — write `# Input / Output / Steps` before every function |
 | Lost mental model mid-session | Cognitive overload caused by holding too many moving parts — reached for code as anchor | Said "let me start fresh", retraced flow from first principles before continuing |
 
-### Key Insight From This Phase
-> RAG does not make the LLM smarter — it constrains it. By telling the LLM "answer only from these retrieved chunks," you remove its ability to insert unverified information from training memory. The answer quality comes from retrieval quality, not model quality.
+### Session Update — tools.py & tools_description.py Refinements
+
+#### Changes Made
+
+**tools.py**
+- `suggest_mvp()` — added `market_context` parameter, injected into prompt
+- `recommend_tech_stack()` — added `market_context` parameter, injected into prompt
+- `risk_analysis()` — added `market_context` and `mvp_context` parameters, both injected into prompt
+- `suggest_mvp()`, `recommend_tech_stack()`, `risk_analysis()` — replaced incorrect `requests.exceptions` handlers with correct Gemini exception types
+
+**tools_description.py**
+- `suggest_mvp()`, `recommend_tech_stack()`, `risk_analysis()` — added precondition instructions in descriptions
+- `summarize_text()` — added when-to-call instruction
+- `risk_analysis()` — added `mvp_context` parameter to schema
+- All three analysis functions — added `market_context` parameter to schema
+
+#### Why These Changes
+
+| Change | Reasoning |
+|---|---|
+| `market_context` added to analysis tools | Analysis tools were producing generic output without awareness of real market conditions. Injecting Tavily's market research results into the prompt gives the model accurate market context — producing deeper, more grounded responses |
+| `mvp_context` added to `risk_analysis()` | Risk analysis is more accurate when it knows what the MVP looks like — risks differ based on what is actually being built |
+| Fixed exception handlers | `suggest_mvp()`, `recommend_tech_stack()`, `risk_analysis()` use the Gemini client — not the `requests` library. `requests.exceptions` are never raised by Gemini API calls. Replaced with correct `google.api_core.exceptions` types |
+
+#### Key Insight
+> Exception handlers must match the library that raises them. Using `requests.exceptions` in a Gemini function means errors silently fall through to the generic `except Exception` — you lose precise diagnosis. Always check which client is making the call before writing the handler.
+
 
 ### The Permanent Rule Set This Phase
 
@@ -213,7 +238,7 @@ Fill it. Verify it. Then code.
 | Phase 3 | RAG constrains the LLM — retrieval quality determines answer quality |
 | Phase 3 | Same embedding model for ingestion and retrieval is non-negotiable |
 | Phase 3 | Flowchart before code is not a rule — it is a cognitive tool for managing complexity |
-
+| Phase 3 | Injecting upstream context into downstream tools produces significantly deeper output than isolated prompts |
 ---
 
 ## 🐛 Mistakes & Lessons
@@ -225,6 +250,7 @@ Fill it. Verify it. Then code.
 | Phase 2 | Wrong tool selected by LLM | Vague tool descriptions | Precision in tool schemas directly affects agent behavior |
 | Phase 3 | Jumped to code before reasoning 4 times | Habit of using code as an anchor under uncertainty | Write `# Input / Output / Steps` before every function |
 | Phase 3 | Lost mental model mid-session | Too many moving parts held simultaneously | Say "let me start fresh" — retrace from first principles |
+| Phase 3 | Wrong exception types in Gemini tools | Copy-pasted handlers from Tavily functions without checking which client raises them | Exception handlers must match the library making the call |
 
 ---
 
