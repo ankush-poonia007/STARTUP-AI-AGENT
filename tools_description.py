@@ -118,23 +118,22 @@ tools = [
     }
   },
   {
-  "type": "function",
-  "function": {
-    "name": "search_documents",
-    "description": "Use this tool when the user explicitly references or relies on their uploaded file, specific document, or local attachment to complete the request.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "user_input": {
-          "type": "string",
-          "description": "The user query or search terms to look up within the attached document database."
-        }
-      },
-      "required": ["user_input"]
+    "type": "function",
+    "function": {
+      "name": "search_documents",
+      "description": "Use this tool when the user explicitly references or relies on their uploaded file, specific document, or local attachment to complete the request.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "user_input": {
+            "type": "string",
+            "description": "The user query or search terms to look up within the attached document database."
+          }
+        },
+        "required": ["user_input"]
+      }
     }
   }
-}
-
 ]
 
 
