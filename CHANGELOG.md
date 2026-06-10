@@ -3,6 +3,20 @@
 All notable changes to BizRadar AI are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
+
+---
+## [v3.2.0] — 2026-06-10 — Agent Scoping Fixes & Prompt Pipeline
+
+### Added
+- Four-stage tool call pipeline in `prompts.py` — explicit sequential ordering with Fan-Out at Stage 1 and Stage 3
+- Hallucinated tool name guard in `agent.py` — unknown tool names now append a clean error message to history instead of crashing
+- `self.context_loaded` boolean flag — prevents `get_context()` from reloading history on every conversation turn
+
+### Fixed
+- `self.future` was an instance variable — observed real bug where two rapid calls shared the same dict, corrupting results. Moved to local variable inside `run()`
+- System prompt was appended inside `run()` — duplicated on every follow-up question. Moved to `__init__()`
+- `future.clear()` removed — was dead code executing on a local variable already out of scope after the `with` block
+
 ---
 ## [v3.1.0] — 2026-06-09 — Tool Context & Exception Fixes
 

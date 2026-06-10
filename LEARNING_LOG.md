@@ -156,6 +156,40 @@ Phase 6 📋 Planned
 #### Key Insight
 > Exception handlers must match the library that raises them. Using `requests.exceptions` in a Gemini function means errors silently fall through to the generic `except Exception` — you lose precise diagnosis. Always check which client is making the call before writing the handler.
 
+### Session Update — agent.py & prompts.py Refactor
+
+#### Changes Made
+
+**agent.py**
+- `self.future` moved from `__init__()` to local variable inside `run()` — prevents concurrent call corruption where two rapid calls were observed sharing the same future dict
+- System prompt append moved from `run()` to `__init__()` — prevents duplicate system prompt appearing in message history on every follow-up question
+- `self.context_loaded` boolean flag added — guards `get_context()` so conversation history loads only once per session, not on every turn
+- `future.clear()` removed — dict is now local, declared fresh on every loop iteration; `.clear()` after the `with` block was dead code
+- Hallucinated tool name guard added — if LLM returns a tool name not in `available_functions`, appends a clean `role=tool` error message to history instead of crashing with a `KeyError`
+- Dev note comments replaced with real explanations of Fan-Out and Fan-In pattern
+
+**prompts.py**
+- Four-stage pipeline added to `TOOL CALL ORDER` section
+- Stage 1 — `analyze_market()` + `search_knowledge_base()` in parallel
+- Stage 2 — `summarize_text()` on both Stage 1 outputs
+- Stage 3 — `suggest_mvp()` + `recommend_tech_stack()` in parallel, both receive `market_context`
+- Stage 4 — `risk_analysis()` alone, receives both `market_context` and `mvp_context`
+
+#### Why These Changes
+
+| Change | Reasoning |
+|---|---|
+| `future` made local | Observed real bug — two rapid calls shared the same instance-level dict, causing futures from one call to corrupt results of another |
+| System prompt to `__init__()` | `run()` is called on every turn — prompt was being appended multiple times, inflating message history |
+| `context_loaded` flag | `get_context()` should run once at session start — not reload history on every follow-up question |
+| `future.clear()` removed | Local variable is garbage collected when the `with` block exits — `.clear()` was executing on an already-dead reference |
+| Hallucinated tool guard | Bare `except Exception` was silently swallowing `KeyError` — now appends a clean error message the LLM can reason about |
+| Four-stage pipeline in prompts | LLM needs explicit ordering — without it, tools were being called out of sequence, passing empty context to downstream tools |
+
+#### Key Insights
+> Instance variables persist across calls — local variables reset every call. For anything that must be fresh on every iteration, always use a local variable. Shared mutable state in concurrent code is a real bug source, not a theoretical one.
+
+> Boolean flags are the simplest form of initialization guard. `context_loaded = False` → set to `True` after first load → every subsequent call skips it. One flag, one line, prevents an entire class of repeated-work bugs.
 
 ### The Permanent Rule Set This Phase
 
@@ -239,6 +273,9 @@ Fill it. Verify it. Then code.
 | Phase 3 | Same embedding model for ingestion and retrieval is non-negotiable |
 | Phase 3 | Flowchart before code is not a rule — it is a cognitive tool for managing complexity |
 | Phase 3 | Injecting upstream context into downstream tools produces significantly deeper output than isolated prompts |
+| Phase 3 | Instance variables persist across calls — local variables reset. Wrong choice causes real concurrency bugs |
+| Phase 3 | One-time initialization belongs in `__init__()` — repeated-call logic belongs in `run()` |
+
 ---
 
 ## 🐛 Mistakes & Lessons
@@ -251,6 +288,8 @@ Fill it. Verify it. Then code.
 | Phase 3 | Jumped to code before reasoning 4 times | Habit of using code as an anchor under uncertainty | Write `# Input / Output / Steps` before every function |
 | Phase 3 | Lost mental model mid-session | Too many moving parts held simultaneously | Say "let me start fresh" — retrace from first principles |
 | Phase 3 | Wrong exception types in Gemini tools | Copy-pasted handlers from Tavily functions without checking which client raises them | Exception handlers must match the library making the call |
+| Phase 3 | `self.future` as instance variable | Shared mutable state across concurrent calls | Anything reset-per-iteration belongs as a local variable, not an instance variable |
+| Phase 3 | System prompt appended in `run()` | `run()` called every turn — prompt duplicated in history | One-time setup belongs in `__init__()`, not in the method called repeatedly |
 
 ---
 
