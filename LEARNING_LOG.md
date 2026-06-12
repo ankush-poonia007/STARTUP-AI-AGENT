@@ -191,6 +191,44 @@ Phase 6 📋 Planned
 
 > Boolean flags are the simplest form of initialization guard. `context_loaded = False` → set to `True` after first load → every subsequent call skips it. One flag, one line, prevents an entire class of repeated-work bugs.
 
+### Session Update — Pipeline Debugging (Pre-Phase 4)
+
+#### Bugs Found & Fixed
+
+| Bug | Description | Root Cause | Fix |
+|---|---|---|---|
+| Bug 1 — Stage Skipping | LLM skipped Stages 2–4, hallucinated full report from Stage 1 alone | No enforcement mechanism requiring all stages to complete | Added Rules 10–13 to `SYSTEM_PROMPT`, consolidated `TOOL CALL ORDER` |
+| Bug 2 — Stage 4 Batching | `risk_analysis()` called in same batch as Stage 3 before `suggest_mvp()` returned | `mvp_context` was hallucinated, not real tool output | Explicit Stage 4 separation in prompt — "Do not combine with Stage 3" |
+| Bug 3 — Silent Stage 4 Skip | Stage 4 marker printed but `risk_analysis()` never called — Risks section hallucinated | Tool call logs alone can't show absence of a call | Added iteration markers — diagnosed via content-based checking |
+| Bug 4 — Schema Validation 400 | `summarize_text()` rejected by Groq API | Special characters (`\xa0`, escaped quotes) in Tavily results break JSON schema validation | 🔄 In Progress |
+
+#### Other Fixes Applied
+- Temperature `0.5` → `0.3` in `agent.py` — reduces randomness, increases instruction-following
+- `risk_analysis()` parameter renamed `idea` → `startup_idea` — consistent with all other tools
+- `rag.py` — `genai.Client()` was missing `api_key` — now explicitly passes `GEMINI_API_KEY`
+
+#### New Architectural Proposal — Under Evaluation
+Move `summarize_text()` to be called internally by `analyze_market()` and `search_knowledge_base()` instead of as a standalone LLM-callable tool.
+
+**Why:** Asking the LLM to receive raw Stage 1 dicts and pass them back as hand-constructed nested JSON is fragile — special characters in real search results cause schema validation failures.
+
+**What changes:**
+- `summarize_text()` removed from `tools_description.py` as LLM-callable tool
+- Each search function summarizes its own results before returning to agent
+- LLM never handles raw search dicts — avoids JSON construction problem entirely
+- Pipeline becomes 3 stages instead of 4 from LLM's perspective
+
+**Open Questions — NOT yet resolved:**
+- Is nested `ThreadPoolExecutor` safe? Outer pool runs `analyze_market()` + `search_knowledge_base()` in parallel, each internally spawning their own pool for per-URL summarization
+- Should `market_context` remain one combined string or become two separate strings — one per search tool?
+
+#### New Diagnostic Skills
+- **Iteration markers** — print at loop start to detect silent stage skips that tool call logs miss
+- **Content-based diagnosis** — read report output to determine if a section reflects real tool output or LLM hallucination. Generic risks with no connection to the actual MVP = hallucinated
+
+#### Key Insight
+> The LLM will always find the shortest path to a valid-looking answer. If that path skips tools, it will skip them — unless the prompt makes skipping explicitly impossible. Enforcement beats instruction.
+
 ### The Permanent Rule Set This Phase
 
 Before writing any function — write this first. No exceptions:
@@ -275,7 +313,9 @@ Fill it. Verify it. Then code.
 | Phase 3 | Injecting upstream context into downstream tools produces significantly deeper output than isolated prompts |
 | Phase 3 | Instance variables persist across calls — local variables reset. Wrong choice causes real concurrency bugs |
 | Phase 3 | One-time initialization belongs in `__init__()` — repeated-call logic belongs in `run()` |
-
+| Phase 3 | The LLM takes the shortest path to a valid-looking answer — enforcement beats instruction |
+| Phase 3 | Content-based diagnosis: generic output = hallucinated. Specific output tied to actual tool results = real |
+| Phase 3 | Iteration markers expose silent failures that tool call logs alone cannot detect |
 ---
 
 ## 🐛 Mistakes & Lessons
@@ -290,6 +330,8 @@ Fill it. Verify it. Then code.
 | Phase 3 | Wrong exception types in Gemini tools | Copy-pasted handlers from Tavily functions without checking which client raises them | Exception handlers must match the library making the call |
 | Phase 3 | `self.future` as instance variable | Shared mutable state across concurrent calls | Anything reset-per-iteration belongs as a local variable, not an instance variable |
 | Phase 3 | System prompt appended in `run()` | `run()` called every turn — prompt duplicated in history | One-time setup belongs in `__init__()`, not in the method called repeatedly |
+| Phase 3 | Jumped to prompt drafts before answering diagnostic questions | Habit of reaching for solutions before completing diagnosis | Complete the diagnosis fully before proposing any fix |
+| Phase 3 | Four separate "do not return" lines in prompt — near-duplicate, verbose | Over-engineering instruction enforcement | One consolidated rule beats four repetitive lines — LLMs respond to clarity, not volume |
 
 ---
 

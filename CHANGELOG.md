@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
+## [v3.3.0] — 2026-06-10 — Phase 3 Pipeline Debugging & Stage Enforcement
+
+### Added
+- Iteration markers in `agent.py` — prints `"Stage N Executing!!"` at start of each `while True` iteration for pipeline diagnosis
+- Rules 10–13 in `SYSTEM_PROMPT` — enforce stage execution order and context passing
+- `market_context` parameter to `suggest_mvp()`, `recommend_tech_stack()`
+- `market_context` and `mvp_context` parameters to `risk_analysis()`
+- Hallucinated tool name guard in `agent.py` — unknown tool names append clean error to history instead of crashing
+
+### Changed
+- Temperature `0.5` → `0.3` in `agent.py` — increases instruction-following for strict stage ordering
+- `TOOL CALL ORDER` in `prompts.py` — replaced verbose repetitive draft with consolidated final version
+- `risk_analysis()` parameter renamed `idea` → `startup_idea` — consistent with all other tools
+- `analyze_market()` and `search_knowledge_base()` — `max_results=3`, content truncated to 300 chars
+
+### Fixed
+- Bug 1 — LLM skipping Stages 2–4 entirely after Stage 1, hallucinating full report
+- Bug 2 — `risk_analysis()` batched with Stage 3 tools before `suggest_mvp()` returned, causing hallucinated `mvp_context`
+- Bug 3 — Stage 4 printed as executing but `risk_analysis()` never called — diagnosed via content-based checking
+- `rag.py` — `genai.Client()` had no API key, now explicitly passes `GEMINI_API_KEY`
+- `suggest_mvp()`, `recommend_tech_stack()`, `risk_analysis()` — wrong `requests.exceptions` handlers replaced with correct Gemini exception types
+
+### In Progress
+- Bug 4 — `summarize_text()` schema validation failing due to special characters (`\xa0`, escaped quotes) in Tavily search results
+- Architecture proposal — move `summarize_text()` internal to `analyze_market()` and `search_knowledge_base()` under evaluation
+
+---
 ## [v3.2.0] — 2026-06-10 — Agent Scoping Fixes & Prompt Pipeline
 
 ### Added
