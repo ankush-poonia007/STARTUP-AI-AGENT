@@ -22,7 +22,7 @@
 <br><br>
 
 <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/></a>
-<img src="https://img.shields.io/badge/Version-v3.0.0-brightgreen?style=for-the-badge" alt="Version"/>
+[![Version](https://img.shields.io/badge/Version-v3.5.0-brightgreen?style=for-the-badge)]() 
 <img src="https://img.shields.io/badge/Phase_3-Complete-brightgreen?style=for-the-badge" alt="Phase 3"/>
 <img src="https://img.shields.io/badge/Phase_4-Next-blue?style=for-the-badge" alt="Phase 4"/>
 <img src="https://img.shields.io/badge/Frameworks-Zero-red?style=for-the-badge" alt="No Frameworks"/>
@@ -86,7 +86,7 @@ bizradar-ai/
 ├── 🤖 agent.py                # ReAct agent — Groq LLM + parallel tool execution loop
 ├── 🖥️  app.py                  # CLI entry point + PDF ingestion trigger
 ├── 🧠 context_manager.py      # Conversation memory — last 6 turns sliding window
-├── 🛠️  tools.py                # Tool layer — Tavily search + Gemini analysis + RAG search
+├── 🛠️  tools.py               # Tool layer — Tavily search + Gemini analysis (self-summarizing) + RAG search
 ├── 📋 tools_description.py    # Tool schemas for LLM tool-calling (JSON format)
 ├── 📝 prompts.py              # System prompt + output format templates
 ├── 🗄️  rag.py                  # RAG pipeline — ingest, embed, store, query
