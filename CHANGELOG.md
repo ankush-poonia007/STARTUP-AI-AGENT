@@ -3,9 +3,46 @@
 All notable changes to BizRadar AI are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
+---
+## [v3.5.0] — 2026-06-13 — Pipeline Verified & RAG Citation Fix
+
+### Changed
+- `SYSTEM_PROMPT` Rule 10 corrected from "four stages" → "three stages" — fixes contradiction between Rule 10 and TOOL CALL ORDER that was causing LLM to narrate instructions as prose instead of executing them
+- `summarize_text` removed from `agent.py` `available_functions` — dead entry after architectural refactor
+- Pipeline confirmed as 3 stages from LLM perspective — Stage 1 (parallel search + self-summarize) → Stage 2 (parallel MVP + tech stack) → Stage 3 (risk analysis alone)
+
+### Fixed
+- Stage print label edge case in `agent.py` — harmless cosmetic mislabeling on edge cases
+- Prompt contradiction — `prompts.py` Rule 10 and TOOL CALL ORDER were inconsistent after Stage 2 removal
+- `query_rag()` — now returns `{"text": ..., "metadata": ...}` dicts via `zip(documents, metadatas)` — enables proper source citations with page numbers and filenames
+
+### Verified
+- 3-stage pipeline confirmed working across 2 different startup ideas — correct order, no stage skipping, no batching
+
+### In Progress
+- `query_rag()` citation fix — implemented, pending PDF upload + query end-to-end test
+
+### Phase 4 Backlog
+- `task_type` parameter for Gemini `embed_content()` calls — `RETRIEVAL_DOCUMENT` for ingestion, `RETRIEVAL_QUERY` for querying
+- `embed_and_store()` batch `add()` fails entirely on any duplicate ID — needs per-chunk upsert logic
+- `conversation_history` persistence to disk/DB
 
 ---
-## [v3.3.0] — 2026-06-10 — Phase 3 Pipeline Debugging & Stage Enforcement
+
+## [v3.4.0] — 2026-06-12 — summarize_text Architecture Refactor
+
+### Changed
+- `summarize_text()` removed as LLM-callable tool — now called internally by `analyze_market()` and `search_knowledge_base()` before returning results
+- `market_context` single parameter replaced with two separate parameters — `market_analysis` and `market_search` — across `suggest_mvp()`, `recommend_tech_stack()`, and `risk_analysis()`
+- Stage 2 removed from `TOOL CALL ORDER` in `prompts.py` — pipeline is now 3 stages from LLM perspective
+- `tools_description.py` — `summarize_text` removed entirely as LLM-callable tool
+
+### Fixed
+- Bug 4 — LLM no longer constructs nested JSON from raw Tavily results — summarization happens internally before results reach the agent — special character schema validation failures eliminated
+
+---
+
+## [v3.3.0] — 2026-06-11 — Phase 3 Pipeline Debugging & Stage Enforcement
 
 ### Added
 - Iteration markers in `agent.py` — prints `"Stage N Executing!!"` at start of each `while True` iteration for pipeline diagnosis
@@ -27,11 +64,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `rag.py` — `genai.Client()` had no API key, now explicitly passes `GEMINI_API_KEY`
 - `suggest_mvp()`, `recommend_tech_stack()`, `risk_analysis()` — wrong `requests.exceptions` handlers replaced with correct Gemini exception types
 
-### In Progress
-- Bug 4 — `summarize_text()` schema validation failing due to special characters (`\xa0`, escaped quotes) in Tavily search results
-- Architecture proposal — move `summarize_text()` internal to `analyze_market()` and `search_knowledge_base()` under evaluation
-
 ---
+
 ## [v3.2.0] — 2026-06-10 — Agent Scoping Fixes & Prompt Pipeline
 
 ### Added
@@ -45,6 +79,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `future.clear()` removed — was dead code executing on a local variable already out of scope after the `with` block
 
 ---
+
 ## [v3.1.0] — 2026-06-09 — Tool Context & Exception Fixes
 
 ### Added
@@ -59,7 +94,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [v3.0.0] — 2026-06-08 — Phase 3
+## [v3.0.0] — 2026-06-08 — Phase 3 Complete
 
 ### Added
 - `rag.py` — complete RAG pipeline built from scratch
@@ -79,8 +114,6 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - `requirements.txt` was missing `groq`, `google-genai`, `tavily-python`, `chromadb`, `pdfplumber`
-
----
 
 ## [v2.0.0] — Phase 2 Complete
 
