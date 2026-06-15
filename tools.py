@@ -1,127 +1,209 @@
 # ============================================================
-#  tools.py — Tool Definitions for Startup Analysis Agent
+#  tools.py — Tool Definitions for BizRadar AI Agent
 # ============================================================
 #
 #  What this file does:
-#  Defines all callable tools used by the startup analysis agent.
-#  Each tool wraps one external API call (Gemini or Tavily) and
-#  returns a structured string/dict result back to the orchestrator.
+#  Defines all callable tools used by the BizRadar AI agent.
+#  Each tool wraps one external API call (Gemini or Tavily) or
+#  one internal pipeline call (RAG), and returns a structured
+#  string result back to the orchestrator in agent.py.
 #
 #  What this file does NOT handle:
-#  Does not orchestrate tool call order — that belongs to the agent.
+#  Does not orchestrate tool call order — that belongs to agent.py.
 #  Does not combine tool outputs into a final report.
 #  Does not manage conversation history or agent state.
 #
-#  Functions:
-#  - summarize_text()         → parallel-summarizes web content via Gemini
-#  - analyze_market()         → searches market data for a startup idea via Tavily
-#  - search_knowledge_base()  → deep Tavily search to ground LLM with sources
-#  - suggest_mvp()            → asks Gemini to recommend core MVP features
-#  - recommend_tech_stack()   → asks Gemini for a lean, fast-to-ship tech stack
-#  - risk_analysis()          → asks Gemini to identify fatal flaws and risks
-#  - search_documents()       → queries local RAG vector store for uploaded PDFs
+#  Functions (LLM-callable tools):
+#  - analyze_market()         → Stage 1: Tavily web search → self-summarizes → returns str
+#  - search_knowledge_base()  → Stage 1: deep Tavily search → self-summarizes → returns str
+#  - suggest_mvp()            → Stage 2: Gemini MVP recommendation with market context
+#  - recommend_tech_stack()   → Stage 2: Gemini tech stack recommendation with market context
+#  - risk_analysis()          → Stage 3: Gemini risk report with market + MVP context
+#  - search_documents()       → Stage 4: queries local RAG vector store for uploaded PDFs
+#                               called on-demand only after Stage 3, never during Stages 1-3
+#
+#  Internal functions (NOT LLM-callable):
+#  - summarize_text()         → called inside analyze_market() and search_knowledge_base()
+#                               before returning — never exposed to the LLM directly
 #
 #  Used by:
 #  - agent.py → calls these tools based on LLM tool-use decisions
 #
-#  Pipeline Flow:
-#  user_input → summarize_text() → [analyze_market(), suggest_mvp(),
-#               recommend_tech_stack(), risk_analysis()] → final LLM report
+#  Pipeline Flow (3+1 stages):
+#  Stage 1: analyze_market() + search_knowledge_base() in parallel
+#           (each self-summarizes before returning a plain str)
+#  Stage 2: suggest_mvp() + recommend_tech_stack() in parallel
+#           (both receive market_context from Stage 1)
+#  Stage 3: risk_analysis() alone
+#           (receives market_context + mvp_context from Stage 2)
+#  Stage 4: search_documents() alone, on-demand, only after Stage 3
+#           (triggered only when user references an uploaded document)
+#
+#  Error string conventions (matched by prompts.py Rules 12 and 13):
+#  Stage 1 failure → "Summarization unavailable — service error, no data retrieved."
+#  Stage 2/3 failure → "<Tool name> unavailable — service error, no data retrieved."
+#  Both Stage 1 tools fail → Rule 12 footer triggered in final report
+#  Stage 2/3 tool fails → Rule 13 per-section note, no footer
 #
 #  Imports from:
-#  - rag.py → query_rag(), embed_and_store(), ingest_pdf()
+#  - rag.py → query_rag()
 # ============================================================
 
+import time
+import os
+import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from google.api_core import exceptions
 from google import genai
 from tavily import TavilyClient
 from dotenv import load_dotenv
-import os
-import requests
 
-from rag import (
-    query_rag,
-    embed_and_store,
-    ingest_pdf,
-)
+from rag import query_rag
 
 
 # ── CLIENT SETUP ──────────────────────────────────────────────
-# Clients initialized once at module level — reused across all tool calls
-# Avoids re-authenticating on every function call
+# Clients initialized once at module level — reused across all tool calls.
+# Avoids re-authenticating on every function call.
+# load_dotenv() must run before os.getenv() to populate the environment.
 
 load_dotenv()
 
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Explicit key passed to avoid ambiguity with GOOGLE_API_KEY env var
+# Explicit api_key passed to avoid ambiguity with GOOGLE_API_KEY env var
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-
 tavily_client = TavilyClient(TAVILY_API_KEY)
 
 
-# ── SUMMARIZATION ─────────────────────────────────────────────
+# ── INTERNAL SUMMARIZATION ────────────────────────────────────
+# NOT an LLM-callable tool. Called internally by analyze_market()
+# and search_knowledge_base() before each returns its result.
+# Removed from tools_description.py — the LLM never sees this function.
 
 def summarize_text(message: dict) -> str:
-    """Summarizes multiple web pages in parallel using Gemini.
+    """Summarizes multiple web pages in parallel using Gemini. Internal use only.
+
+    Called by analyze_market() and search_knowledge_base() to convert raw
+    Tavily search results into a clean summarized string before returning
+    to the agent. Not exposed to the LLM as a callable tool.
 
     Parameters:
-        message (dict) → URL-keyed dict where each value is [title, content].
-                         Produced by analyze_market() or search_knowledge_base().
+        message (dict) → URL-keyed dict where each value is [title, content_string].
+                         Produced by analyze_market() or search_knowledge_base()
+                         before calling this function.
 
     Returns:
-        str → concatenated block of Title / Summary / URL for each page,
-              or an error string if the API call fails.
+        str → concatenated block of Title / Summary / URL for each page.
+              Returns "Summarization unavailable — service error, no data retrieved."
+              if ALL URLs fail. Individual URL failures are skipped silently.
 
-    Flow:
-        1. Spin up a ThreadPoolExecutor — one Gemini call submitted per URL
-        2. Build a prompt per URL using the page content from message[url][1]
-        3. Map each Future back to its URL using a future → url dict
-        4. As futures complete, collect and concatenate Title + Summary + URL
-        5. Return the full concatenated response string
+    Why parallel execution via ThreadPoolExecutor:
+        Each URL requires a separate Gemini API call. Running them sequentially
+        multiplies latency by the number of results. Parallel execution cuts
+        total wait time to the duration of the slowest single call.
 
-    Concepts used:
-        - ThreadPoolExecutor  → runs all Gemini calls concurrently instead of
-                                sequentially, cutting total wait time significantly
-        - as_completed()      → yields futures as they finish, not in submission
-                                order — faster response from quicker pages first
-        - future dict (future→url) → standard Fan-Out pattern; lets us recover
-                                     which URL each future belongs to after completion
+    Why as_completed() over executor.map():
+        as_completed() yields results as each future finishes — faster overall
+        when pages have different response times. A fast page does not wait
+        for a slow one. executor.map() blocks until all finish and returns in order.
+
+    Why individual URL failures are skipped (not placeholder text):
+        Appending "Summary: [unavailable]" would pass placeholder text as real
+        market data to the LLM. Skipping entirely means market_context only ever
+        contains real summarized content — no hallucination risk from placeholders.
+
+    Why time.sleep(25) between Fan-Out submissions:
+        analyze_market() and search_knowledge_base() run in parallel in Stage 1,
+        each firing up to 3 Gemini calls via summarize_text(). Without throttling,
+        up to 6 simultaneous Gemini calls exceed the free tier 5 RPM limit,
+        causing cascading 429 failures into Stages 2 and 3.
+        sleep(25) between submissions reduces combined rate to ~6/min — partial
+        mitigation. Full fix (shared semaphore) deferred to Phase 4.
+
+    Why this is internal and not LLM-callable:
+        Passing raw Tavily result dicts through the LLM for JSON reconstruction
+        caused 400 schema validation failures due to special characters in real
+        web content (Bug 12 / Bug 4). Moving summarization internal eliminates
+        this fragility entirely.
     """
 
     try:
+
+        def _call_gemini_with_retry(prompt: str, max_retries: int = 3):
+            """Retries Gemini generate_content on 429/503 with exponential backoff.
+
+            Parameters:
+                prompt      (str) → full prompt string to send to Gemini
+                max_retries (int) → maximum retry attempts. Default 3.
+
+            Returns:
+                Gemini response object on success. Raises on final attempt failure.
+            """
+            for attempt in range(max_retries):
+                try:
+                    return gemini_client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=prompt
+                    )
+                except exceptions.ResourceExhausted:
+                    if attempt < max_retries - 1:
+                        wait = 15 * (attempt + 1)  # 15s, 30s, 45s
+                        print(f"   ⏳ Rate limited (429) — retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
+                        time.sleep(wait)
+                    else:
+                        raise
+
+                except exceptions.ServiceUnavailable:
+                    if attempt < max_retries - 1:
+                        wait = 5 * (attempt + 1)  # shorter — 503 is transient
+                        print(f"   ⏳ Gemini unavailable (503) — retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
+                        time.sleep(wait)
+                    else:
+                        raise
+
         with ThreadPoolExecutor() as executor:
 
-            # Step 1: Submit one Gemini call per URL, map future → url
+            # Fan-Out — submit one Gemini call per URL, map future → url.
+            # time.sleep(25) between submissions throttles RPM to stay within
+            # free tier limits when both Stage 1 tools run in parallel.
             future = {}
             for url in message:
                 full_prompt = f"""You are a professional summarizer.
 Please read the following text and provide a concise and clear summary.
 ---
-
-Text to summarize: {message[url][1]} ---
-
+Text to summarize: {message[url][1]}
+---
 Summary:
 """
-                future[executor.submit(
-                    gemini_client.models.generate_content,
-                    model="gemini-2.5-flash",
-                    contents=full_prompt
-                )] = url
+                future[executor.submit(_call_gemini_with_retry, full_prompt)] = url
+                time.sleep(25)
 
-            # Step 2: Collect results as each future completes
+            # Fan-In — collect results as each future completes.
+            # Individual URL failures are skipped — only real summaries appended.
+            # Failed futures never contribute placeholder text to market_context.
             response = ""
             for complete_future in as_completed(future):
                 url = future[complete_future]
-                response += (
-                    f"Title: {message[url][0]}\n"
-                    f"Summary: {complete_future.result(timeout=60).text}\n"
-                    f"URL: {url}\n\n"
-                )
+                try:
+                    result = complete_future.result(timeout=60)
+                    response += (
+                        f"Title: {message[url][0]}\n"
+                        f"Summary: {result.text}\n"
+                        f"URL: {url}\n\n"
+                    )
+                except Exception:
+                    # Skip — retries already exhausted inside _call_gemini_with_retry.
+                    # No fallback text — LLM must not treat placeholders as real data.
+                    continue
 
-        # Step 3: Return full concatenated summary block
+        # All URLs failed — response stayed empty.
+        # Distinct error string matched by context guard in analyze_market()
+        # and search_knowledge_base() — triggers Rule 12 handling if both fail.
+        if not response:
+            return "Summarization unavailable — service error, no data retrieved."
+
         return response
 
     except exceptions.ResourceExhausted as e:
@@ -142,128 +224,174 @@ Summary:
 
 # ── TAVILY TOOLS ──────────────────────────────────────────────
 
-def analyze_market(startup_idea: str) -> dict:
-    """Searches the web for market data related to a startup idea.
+def analyze_market(startup_idea: str) -> str:
+    """Searches the web for market data and returns a summarized analysis string.
+
+    Stage 1 tool — runs in parallel with search_knowledge_base().
+    Performs a basic-depth Tavily search for market size, trends, and demand,
+    then internally summarizes results via summarize_text() before returning.
+    The returned string is passed as part of market_context to Stage 2 tools.
 
     Parameters:
         startup_idea (str) → raw startup concept or one-liner from the user
 
     Returns:
-        dict → URL-keyed dict where each value is [title, content_string],
-               ready to be passed into summarize_text().
-               Returns an error string on failure.
+        str → summarized market analysis string ready for downstream tools.
+              Returns "Summarization unavailable — service error, no data retrieved."
+              if summarize_text() fails entirely — matched by Rule 12 in prompts.py.
 
-    Flow:
-        1. Run a basic-depth Tavily search using startup_idea as the query
-        2. Loop through results and build a url → [title, content] dict
-        3. Return the dict for downstream summarization
+    Why search_depth="basic":
+        Faster and lower-cost than advanced depth. Sufficient for market
+        overview — deep fact verification is handled by search_knowledge_base().
 
-    Concepts used:
-        - search_depth="basic"  → faster, lower-cost search; sufficient for
-                                  market overview (not deep fact verification)
-        - exclude_domains       → filters social media noise that Tavily often
-                                  surfaces for business queries
+    Why self-summarize before returning:
+        Passing raw Tavily dicts through the LLM for JSON reconstruction caused
+        400 schema validation failures (Bug 12). Summarizing internally returns
+        a clean string the LLM can pass directly as market_context.
+
+    Why context guard before returning:
+        If summarize_text() returns an error string, passing it as market_context
+        would cause the LLM to treat error text as real market research data,
+        producing hallucinated reports with false confidence.
     """
 
     try:
-        # Step 1: Tavily web search — basic depth for speed
+        # Tavily basic search — fast market overview
         response = tavily_client.search(
             query=startup_idea,
             include_answer="advanced",
             search_depth="basic",
             country="india",
             exclude_domains=["facebook.com", "x.com", "instagram.com"],
+            max_results=3
         )
 
-        # Step 2: Reshape results into url → [title, content] format
+        # Reshape results into url → [title, content] dict for summarize_text()
         message = {}
         for result in response["results"]:
-            content = "\nResult :\nContent: " + result["content"]
-            message[result["url"]] = [result["title"], content]
+            content = result["content"][:300]
+            content = content.replace("\xa0", " ").replace("\n", " ").replace('"', "'").replace("\\", "")
+            message[result["url"]] = [result["title"], "\nResult:\nContent: " + content]
 
-        # Step 3: Return structured dict for summarize_text()
-        return message
+        # Summarize internally — returns clean str, not raw dict
+        result = summarize_text(message)
+
+        # Context guard — prevents error strings from reaching downstream tools as market data.
+        # Covers all known error prefixes from summarize_text() and Gemini exception handlers.
+        if any(result.startswith(prefix) for prefix in [
+            "Summarization unavailable",
+            "An unexpected error",
+            "Rate Limited",
+            "Auth Error",
+            "Generic API Error",
+            "Configuration Error"
+        ]):
+            return "Summarization unavailable — service error, no data retrieved."
+
+        return result
 
     except requests.exceptions.HTTPError:
-        return "HTTP error occurred"
+        return "Summarization unavailable — service error, no data retrieved."
 
     except requests.exceptions.ConnectionError:
-        return "Connection error: Check your internet or server URL."
+        return "Summarization unavailable — service error, no data retrieved."
 
     except requests.exceptions.Timeout:
-        return "Timeout error: The server took too long to respond."
+        return "Summarization unavailable — service error, no data retrieved."
 
     except requests.exceptions.RequestException:
-        return "An unexpected request error occurred."
+        return "Summarization unavailable — service error, no data retrieved."
 
     except ValueError as e:
         return f"Configuration Error: {e}"
 
     except Exception as e:
-        return f"An unexpected error occurred: {e}"
+        return "Summarization unavailable — service error, no data retrieved."
 
 
-def search_knowledge_base(query: str) -> dict:
-    """Deep Tavily search to retrieve grounding sources and reduce hallucination.
+def search_knowledge_base(query: str) -> str:
+    """Deep Tavily search to retrieve competitor and industry sources.
+
+    Stage 1 tool — runs in parallel with analyze_market().
+    Performs a Tavily search for competitor data and industry insights,
+    then internally summarizes results via summarize_text() before returning.
+    The returned string is passed as part of market_context to Stage 2 tools
+    alongside analyze_market() output.
 
     Parameters:
         query (str) → specific claim or topic the agent needs to verify or expand
 
     Returns:
-        dict → URL-keyed dict where each value is [title, content_string],
-               same structure as analyze_market() — compatible with summarize_text().
-               Returns an error string on failure.
+        str → summarized competitor and industry analysis string.
+              Returns "Summarization unavailable — service error, no data retrieved."
+              if summarize_text() fails entirely — matched by Rule 12 in prompts.py.
 
-    Flow:
-        1. Run an advanced-depth Tavily search on the query
-        2. Loop through results and build url → [title, content] dict
-        3. Return the dict
+    Why search_depth="basic":
+        Advanced depth is slower and costlier — kept basic to stay within
+        Groq TPM limits during parallel Stage 1 execution.
 
-    Concepts used:
-        - search_depth="advanced" → slower but more thorough than analyze_market();
-                                    used here because accuracy matters more than speed
-                                    when grounding LLM claims with real sources
     Why same return shape as analyze_market():
-        Both feed into summarize_text() — consistent shape avoids branching logic
-        in the orchestrator.
+        Both feed into market_context for Stage 2 — consistent str return
+        avoids branching logic in the orchestrator.
+
+    Why same context guard as analyze_market():
+        Both Stage 1 tools feed market_context. If either returns an error string
+        and it reaches the LLM, the LLM treats it as real competitor data.
+        Rule 12 in prompts.py handles the case where both return the unavailable string.
     """
 
     try:
-        # Step 1: Deep Tavily search for factual grounding
+        # Tavily search — competitor and industry grounding
         response = tavily_client.search(
             query=query,
             include_answer="advanced",
-            search_depth="advanced",
+            search_depth="basic",
             country="india",
             exclude_domains=["facebook.com", "x.com", "instagram.com"],
+            max_results=3
         )
 
-        # Step 2: Reshape into url → [title, content] format
+        # Reshape into url → [title, content] dict for summarize_text()
         message = {}
         for result in response["results"]:
-            content = "\nResult :\nContent: " + result["content"]
-            message[result["url"]] = [result["title"], content]
+            content = result["content"][:300]
+            content = content.replace("\xa0", " ").replace("\n", " ").replace('"', "'").replace("\\", "")
+            message[result["url"]] = [result["title"], "\nResult:\nContent: " + content]
 
-        # Step 3: Return structured dict
-        return message
+        # Summarize internally — returns clean str, not raw dict
+        result = summarize_text(message)
+
+        # Context guard — same logic as analyze_market().
+        # Covers all known error prefixes from summarize_text() and Gemini exception handlers.
+        if any(result.startswith(prefix) for prefix in [
+            "Summarization unavailable",
+            "An unexpected error",
+            "Rate Limited",
+            "Auth Error",
+            "Generic API Error",
+            "Configuration Error"
+        ]):
+            return "Summarization unavailable — service error, no data retrieved."
+
+        return result
 
     except requests.exceptions.HTTPError:
-        return "HTTP error occurred"
+        return "Summarization unavailable — service error, no data retrieved."
 
     except requests.exceptions.ConnectionError:
-        return "Connection error: Check your internet or server URL."
+        return "Summarization unavailable — service error, no data retrieved."
 
     except requests.exceptions.Timeout:
-        return "Timeout error: The server took too long to respond."
+        return "Summarization unavailable — service error, no data retrieved."
 
     except requests.exceptions.RequestException:
-        return "An unexpected request error occurred."
+        return "Summarization unavailable — service error, no data retrieved."
 
     except ValueError as e:
         return f"Configuration Error: {e}"
 
     except Exception as e:
-        return f"An unexpected error occurred: {e}"
+        return "Summarization unavailable — service error, no data retrieved."
 
 
 # ── GEMINI LLM TOOLS ──────────────────────────────────────────
@@ -271,28 +399,32 @@ def search_knowledge_base(query: str) -> dict:
 def suggest_mvp(startup_idea: str, market_context: str = "") -> str:
     """Asks Gemini to recommend the most essential MVP features for a startup.
 
+    Stage 2 tool — runs in parallel with recommend_tech_stack().
+    Receives market_context from combined Stage 1 outputs to produce
+    grounded, market-aware MVP recommendations rather than generic ones.
+    Output is passed as mvp_context to risk_analysis() in Stage 3.
+
     Parameters:
         startup_idea   (str) → raw startup concept from the user
-        market_context (str) → summarized market data from summarize_text(analyze_market()).
+        market_context (str) → combined summarized output from Stage 1 tools.
                                Defaults to empty string — function works standalone
                                but produces grounded output when context is provided.
 
     Returns:
-        str → Gemini's plain-text MVP recommendation,
-              or an error string on failure.
-
-    Flow:
-        1. Build advisor prompt — inject market_context if available, else note its absence
-        2. Call Gemini with the prompt
-        3. Return the response text
+        str → Gemini's plain-text MVP recommendation on success.
+              Returns "MVP suggestion unavailable — service error, no data retrieved."
+              on failure — matched by Rule 13 in prompts.py for per-section note.
 
     Why default empty string for market_context:
-        Allows the function to be called standalone during testing or early pipeline
-        stages, without requiring the full Fan-Out to have completed first.
-        The orchestrator passes real context when available.
+        Allows standalone testing without requiring the full Stage 1 pipeline
+        to have completed first. The orchestrator passes real context in production.
+
+    Why startup advisor persona in prompt:
+        Role-prompting nudges the model toward focused, 3-month-buildable
+        recommendations rather than exhaustive feature lists.
     """
 
-    # Step 1: Build advisor prompt — ground with market data if available
+    # Build advisor prompt — inject market data if available
     market_section = market_context if market_context else "No market data available."
     full_prompt = f"""You are a startup advisor. Based on this idea: {startup_idea},
 
@@ -302,61 +434,74 @@ Market Analysis:
 Suggest the most essential MVP features that can be built
 in under 3 months with a small team. Focus on core value delivery only."""
 
-    try:
-        # Step 2: Single Gemini call — no parallelism needed here
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=full_prompt,
-        )
+    for attempt in range(3):
+        try:
+            response = gemini_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=full_prompt,
+            )
+            break
 
-        # Step 3: Return raw text response
-        return response.text
+        except exceptions.ResourceExhausted:
+            if attempt < 2:
+                wait = 15 * (attempt + 1)
+                print(f"   ⏳ Rate limited (429) — retrying in {wait}s (attempt {attempt + 1}/3)...")
+                time.sleep(wait)
+            else:
+                return "MVP suggestion unavailable — service error, no data retrieved."
 
-    except exceptions.ResourceExhausted as e:
-        return f"Rate Limited (429): Backing off request loops. Details: {e}"
+        except exceptions.ServiceUnavailable:
+            if attempt < 2:
+                wait = 5 * (attempt + 1)
+                print(f"   ⏳ Gemini unavailable (503) — retrying in {wait}s (attempt {attempt + 1}/3)...")
+                time.sleep(wait)
+            else:
+                return "MVP suggestion unavailable — service error, no data retrieved."
 
-    except exceptions.Unauthenticated as e:
-        return f"Auth Error (401): Check system environment API keys. Details: {e}"
+        except exceptions.Unauthenticated as e:
+            return f"Auth Error (401): Check system environment API keys. Details: {e}"
 
-    except exceptions.GoogleAPICallError as e:
-        return f"Generic API Error: {e.code} - {e.message}"
+        except exceptions.GoogleAPICallError as e:
+            return f"Generic API Error: {e.code} - {e.message}"
 
-    except ValueError as e:
-        return f"Configuration Error: {e}"
+        except ValueError as e:
+            return f"Configuration Error: {e}"
 
-    except Exception as e:
-        return f"An unexpected error occurred: {e}"
-    
+        except Exception:
+            return "MVP suggestion unavailable — service error, no data retrieved."
+
+    return response.text
 
 
 def recommend_tech_stack(startup_idea: str, market_context: str = "") -> str:
     """Asks Gemini to recommend a lean tech stack for fast time-to-market.
 
+    Stage 2 tool — runs in parallel with suggest_mvp().
+    Receives market_context from combined Stage 1 outputs to produce
+    stack recommendations informed by what competitors use and what
+    the target market expects.
+
     Parameters:
         startup_idea   (str) → raw startup concept from the user
-        market_context (str) → summarized market data from summarize_text(analyze_market()).
+        market_context (str) → combined summarized output from Stage 1 tools.
                                Defaults to empty string — function works standalone
                                but produces grounded output when context is provided.
 
     Returns:
-        str → Gemini's plain-text tech stack recommendation,
-              or an error string on failure.
-
-    Flow:
-        1. Build a CTO-persona prompt — inject market_context if available
-        2. Call Gemini with the prompt
-        3. Return the response text
+        str → Gemini's plain-text tech stack recommendation on success.
+              Returns "Tech stack recommendation unavailable — service error, no data retrieved."
+              on failure — matched by Rule 13 in prompts.py for per-section note.
 
     Why CTO persona in prompt:
         Role-prompting nudges the model toward opinionated, practical choices
         rather than exhaustive lists — more useful for a small team deciding fast.
 
     Why market_context matters here:
-        Market data reveals what competitors are using and what the target users
+        Market data reveals what competitors are using and what target users
         expect — both influence stack decisions beyond just the idea itself.
     """
 
-    # Step 1: Build CTO-persona prompt — ground with market data if available
+    # Build CTO-persona prompt — inject market data if available
     market_section = market_context if market_context else "No market data available."
     full_prompt = f"""You are an expert Chief Technology Officer (CTO) and software architect.
 Based on this startup idea: {startup_idea},
@@ -368,73 +513,84 @@ Recommend a lean tech stack that allows a small team to launch in under 3 months
 Focus entirely on speed to market, ease of development, scalability, and minimal maintenance overhead.
 """
 
-    try:
-        # Step 2: Gemini call
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=full_prompt,
-        )
+    for attempt in range(3):
+        try:
+            response = gemini_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=full_prompt,
+            )
+            break
 
-        # Step 3: Return recommendation text
-        return response.text
+        except exceptions.ResourceExhausted:
+            if attempt < 2:
+                wait = 15 * (attempt + 1)
+                print(f"   ⏳ Rate limited (429) — retrying in {wait}s (attempt {attempt + 1}/3)...")
+                time.sleep(wait)
+            else:
+                return "Tech stack recommendation unavailable — service error, no data retrieved."
 
-    except requests.exceptions.HTTPError:
-        return "HTTP error occurred"
+        except exceptions.ServiceUnavailable:
+            if attempt < 2:
+                wait = 5 * (attempt + 1)
+                print(f"   ⏳ Gemini unavailable (503) — retrying in {wait}s (attempt {attempt + 1}/3)...")
+                time.sleep(wait)
+            else:
+                return "Tech stack recommendation unavailable — service error, no data retrieved."
 
-    except requests.exceptions.ConnectionError:
-        return "Connection error: Check your internet or server URL."
+        except exceptions.Unauthenticated as e:
+            return f"Auth Error (401): Check system environment API keys. Details: {e}"
 
-    except requests.exceptions.Timeout:
-        return "Timeout error: The server took too long to respond."
+        except exceptions.GoogleAPICallError as e:
+            return f"Generic API Error: {e.code} - {e.message}"
 
-    except requests.exceptions.RequestException:
-        return "An unexpected request error occurred."
+        except ValueError as e:
+            return f"Configuration Error: {e}"
 
-    except ValueError as e:
-        return f"Configuration Error: {e}"
+        except Exception:
+            return "Tech stack recommendation unavailable — service error, no data retrieved."
 
-    except Exception as e:
-        return f"An unexpected error occurred: {e}"
-
+    return response.text
 
 
-def risk_analysis(idea: str, market_context: str = "", mvp_context: str = "") -> str:
+def risk_analysis(startup_idea: str, market_context: str = "", mvp_context: str = "") -> str:
     """Asks Gemini to identify fatal flaws and risks for a startup idea.
 
+    Stage 3 tool — runs alone after Stage 2 completes.
+    Receives both market_context from Stage 1 and mvp_context from Stage 2
+    to produce risk analysis targeted at the specific MVP and market conditions,
+    not a generic version of the idea.
+
     Parameters:
-        idea           (str) → raw startup concept from the user
-        market_context (str) → summarized market data from summarize_text(analyze_market()).
+        startup_idea   (str) → raw startup concept from the user
+        market_context (str) → combined summarized output from Stage 1 tools.
                                Defaults to empty string — function works standalone
                                but produces grounded output when context is provided.
-        mvp_context    (str) → suggest_mvp() output from Stage 3.
+        mvp_context    (str) → suggest_mvp() output from Stage 2.
                                Defaults to empty string — when provided, risk analysis
                                targets the specific MVP recommended, not a generic version.
 
     Returns:
-        str → Gemini's plain-text risk report with mitigation strategies,
-              or an error string on failure.
-
-    Flow:
-        1. Build venture-analyst prompt — inject market_context and mvp_context if available
-        2. Call Gemini with the prompt
-        3. Return the response text
+        str → Gemini's plain-text risk report with mitigation strategies on success.
+              Returns "Risk analysis unavailable — service error, no data retrieved."
+              on failure — matched by Rule 13 in prompts.py for per-section note.
 
     Why "fatal flaws" framing in prompt:
-        Generic risk prompts return obvious answers. Asking specifically for
-        fatal flaws forces the model to prioritise high-severity risks over
-        boilerplate concerns like "competition exists".
+        Generic risk prompts return obvious boilerplate ("competition exists").
+        Asking specifically for fatal flaws forces the model to prioritize
+        high-severity, startup-killing risks over generic concerns.
 
     Why mvp_context matters:
-        Risks are MVP-specific — a risk relevant to a marketplace MVP is different
-        from one relevant to a SaaS MVP. Without mvp_context, Gemini analyses
-        risks against a generic version of the idea, not the actual build plan.
+        Risks are MVP-specific — a marketplace MVP has different failure modes
+        than a SaaS MVP. Without mvp_context, Gemini analyses a generic
+        version of the idea, not the actual build plan from Stage 2.
     """
 
-    # Step 1: Build risk analyst prompt — ground with market and MVP data if available
+    # Build risk analyst prompt — inject market and MVP data if available
     market_section = market_context if market_context else "No market data available."
     mvp_section    = mvp_context    if mvp_context    else "No MVP plan available."
+
     full_prompt = f"""You are a startup risk management expert and venture analyst.
-Based on this startup idea: {idea},
+Based on this startup idea: {startup_idea},
 
 Market Analysis:
 {market_section}
@@ -442,34 +598,47 @@ Market Analysis:
 MVP Plan:
 {mvp_section}
 
-Conduct a rigorous risk analysis for launching this product. Focus on identifying fatal flaws and hidden bottlenecks,
-and provide clear, actionable mitigation strategies for a small team.
+Conduct a rigorous risk analysis for launching this product. Focus on identifying fatal flaws
+and hidden bottlenecks, and provide clear, actionable mitigation strategies for a small team.
 """
 
-    try:
-        # Step 2: Gemini call
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=full_prompt,
-        )
+    for attempt in range(3):
+        try:
+            response = gemini_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=full_prompt,
+            )
+            break
 
-        # Step 3: Return risk report text
-        return response.text
+        except exceptions.ResourceExhausted:
+            if attempt < 2:
+                wait = 15 * (attempt + 1)
+                print(f"   ⏳ Rate limited (429) — retrying in {wait}s (attempt {attempt + 1}/3)...")
+                time.sleep(wait)
+            else:
+                return "Risk analysis unavailable — service error, no data retrieved."
 
-    except exceptions.ResourceExhausted as e:
-        return f"Rate Limited (429): Backing off request loops. Details: {e}"
+        except exceptions.ServiceUnavailable:
+            if attempt < 2:
+                wait = 5 * (attempt + 1)
+                print(f"   ⏳ Gemini unavailable (503) — retrying in {wait}s (attempt {attempt + 1}/3)...")
+                time.sleep(wait)
+            else:
+                return "Risk analysis unavailable — service error, no data retrieved."
 
-    except exceptions.Unauthenticated as e:
-        return f"Auth Error (401): Check system environment API keys. Details: {e}"
+        except exceptions.Unauthenticated as e:
+            return f"Auth Error (401): Check system environment API keys. Details: {e}"
 
-    except exceptions.GoogleAPICallError as e:
-        return f"Generic API Error: {e.code} - {e.message}"
+        except exceptions.GoogleAPICallError as e:
+            return f"Generic API Error: {e.code} - {e.message}"
 
-    except ValueError as e:
-        return f"Configuration Error: {e}"
+        except ValueError as e:
+            return f"Configuration Error: {e}"
 
-    except Exception as e:
-        return f"An unexpected error occurred: {e}"
+        except Exception:
+            return "Risk analysis unavailable — service error, no data retrieved."
+
+    return response.text
 
 
 # ── RAG TOOL ──────────────────────────────────────────────────
@@ -477,37 +646,57 @@ and provide clear, actionable mitigation strategies for a small team.
 def search_documents(user_input: str) -> str:
     """Queries the local RAG vector store for relevant chunks from uploaded PDFs.
 
+    Stage 4 tool — called on-demand, ONLY after Stages 1, 2, and 3 have completed.
+    Triggered only when the user explicitly references an uploaded document.
+    Delegates entirely to query_rag() in rag.py — this function is intentionally
+    thin to keep tool logic separate from RAG pipeline logic.
+
     Parameters:
         user_input (str) → natural language query from the user or agent
 
     Returns:
-        str → matched document chunks from the vector store,
-              or a not-found message if no results are returned.
+        str → formatted plain text string with page citations per chunk.
+              Format: "[Page N, filename]: chunk text"
+              Returns error string if the vector store is empty or unavailable.
 
-    Flow:
-        1. Call query_rag() with the user input
-        2. Check if any results were returned
-        3. Return results, or a fallback message if empty
+    Why plain text format (not list of dicts):
+        Returning a stringified list of dicts required the LLM to parse structured
+        data from a string — same class of fragility as Bug 12. Plain text with
+        inline citations lets the LLM read and cite directly without parsing.
 
-    Concepts used:
-        - RAG (Retrieval-Augmented Generation) → retrieves grounding context
-          from user-uploaded documents before passing to LLM, reducing hallucination
-          on domain-specific content that Gemini hasn't seen
+    Why chunk text truncated to 300 chars:
+        search_documents() is called as Stage 4, after Stages 1-3 have already
+        populated self.messages with substantial context. Untruncated chunks bloat
+        the message history and can crowd out the LLM's reasoning room for the
+        final answer generation. 300 chars preserves enough for citation and context.
 
     Why separate from search_knowledge_base():
-        This queries local PDFs the user uploaded — private, offline context.
-        search_knowledge_base() queries the live web. They serve different
-        grounding purposes and should not be merged.
+        This queries local PDFs the user uploaded — private, session-specific context.
+        search_knowledge_base() queries the live web. Different grounding purposes,
+        should never be merged — one is offline/private, one is online/public.
+
+    Why this function is thin (delegates to query_rag()):
+        All RAG pipeline logic belongs in rag.py — ingest, embed, store, retrieve.
+        Keeping this wrapper thin means tools.py stays decoupled from RAG internals.
+        rag.py can be tested and updated independently.
     """
 
-    print("Calling search_documents tool...")
+    print("   🔍 Querying local document store...")
 
-    # Step 1: Query the local RAG vector store
+    # Delegate to RAG pipeline — returns list of {text, metadata} dicts
     search_response = query_rag(user_input)
 
-    # Step 2: Guard against empty results — RAG can return None or []
+    # Guard against empty results — handles case where no PDF was ingested
     if not search_response:
-        return "No data found. The file does not exist. Please check the file connection."
+        return "No data found in document store. Please check that a file was uploaded successfully."
 
-    # Step 3: Return matched chunks to the agent
-    return search_response
+    # Format as plain text with inline page citations.
+    # Truncate each chunk to 300 chars — prevents context window overflow at Stage 4.
+    formatted_response = ""
+    for chunk in search_response:
+        page   = chunk["metadata"]["page_number"]
+        fname  = chunk["metadata"]["file_name"]
+        text   = chunk["text"][:300]
+        formatted_response += f"[Page {page}, {fname}]: {text}\n\n"
+
+    return formatted_response
