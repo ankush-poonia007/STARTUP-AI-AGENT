@@ -6,7 +6,7 @@
 
 [![Phase](https://img.shields.io/badge/Current_Phase-4_Next-blue?style=for-the-badge)]()
 [![Phase 3](https://img.shields.io/badge/Phase_3-Complete-brightgreen?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-v3.5.0-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-v3.6.0-orange?style=for-the-badge)]()
 </div>
 
 ---
@@ -22,7 +22,7 @@
 ```
 Phase 1 ✅ Complete
 Phase 2 ✅ Complete
-Phase 3 ✅ Complete
+Phase 3 ✅ Complete — Closed
 Phase 4 🔜 Next
 Phase 5 📋 Planned
 Phase 6 📋 Planned
@@ -115,7 +115,7 @@ Phase 6 📋 Planned
 |---|---|
 | `PersistentClient` over `Client()` | Data must survive between sessions |
 | `get_or_create_collection` | Safe for repeated initialization — no crash on restart |
-| `text-embedding-004` | Consistent with existing Gemini stack in `tools.py` |
+| `gemini-embedding-001` | `text-embedding-004` returned 404 NOT_FOUND on free tier API key — switched to stable production alternative |
 | Same model for Phase 1 and Phase 2 | Different models produce different vector spaces — similarity search breaks |
 | MD5 hash of chunk text as ID | Prevents duplicates even when the same PDF is renamed |
 | Flat list structure for chunks | Simplifies the embedding loop — no nested iteration |
@@ -295,39 +295,120 @@ Fill it. Verify it. Then code.
 - Rule 10 corrected from "four stages" → "three stages" — was contradicting `TOOL CALL ORDER` after Stage 2 removal
 **`agent.py`**
 - Stage print label edge case fixed ✅
----
-### 🎯 Phase 4 Entry Checklist
- 
-Before starting Phase 4 — complete these:
- 
-1. **Confirm `query_rag()` citation fix end-to-end** — upload a real PDF, query it, verify `{"text": ..., "metadata": ...}` dicts are returned and citations appear correctly in agent response
-2. **Resolve Phase 4 backlog items in order:**
-   - `task_type` in `embed_content()` — add `RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY`
-   - Batch duplicate ID failure in `embed_and_store()` — implement per-chunk upsert
-   - Conversation history persistence — SQLite or disk
-3. **Answer before starting Phase 4** — right now BizRadar ingests one PDF at startup. What architectural changes are needed to support multiple PDFs with metadata filtering per document? Do not code. Reason first. Flowchart second. Code third.
 
 ---
+### Session Update v3.6.0 — Phase 3 Closure & RAG Integration
 
+#### Changes Made
+
+**`prompts.py`**
+- Rule 11 — added explicit prohibition: "Never call search_documents() during Stages 1, 2, or 3"
+- Rule 12 — Stage 1 both-unavailable fallback with explicit stop condition
+- Rule 13 — added: Stage 2/3 failure handling distinct from Rule 12 footer
+- Stage 4 — added explicitly in TOOL CALL ORDER: "ONLY after Stage 3, never during Stages 1, 2, or 3"
+- Chain of thought block added — LLM reasons about which stages are required before acting
+- Output format — per-section fallback notes for Rule 13 added
+- Formatting bug fixed — missing newline between Rule 9 and Rule 10
+
+**`tools.py`**
+- Inner `try/except` per URL in `summarize_text()` Fan-In — failed URLs skipped, not propagated
+- All-failed guard added — `if not response: return "Summarization unavailable..."`
+- Context guard added in `analyze_market()` and `search_knowledge_base()` — error strings flagged as `[MARKET DATA UNAVAILABLE]` before reaching LLM
+- All Stage 2/3 error returns normalized to `"<X> unavailable — service error, no data retrieved."` matching Rule 13 pattern
+- `search_documents()` return format changed to plain text `[Page N, filename]: text` — enables direct citation
+- `time.sleep(25)` added between Fan-Out URL submissions in `summarize_text()` — RPM partial mitigation
+- 503 retry added alongside 429 retry — `exceptions.ServiceUnavailable` handled
+
+**`tools_description.py`**
+- `search_documents` description rewritten — explicit Stage 4, "ONLY after Stages 1, 2, and 3", "Do not call during Stage 1, 2, or 3"
+- All tool descriptions — cross-stage prohibitions added per tool
+
+**`rag.py`**
+- `text-embedding-004` → `gemini-embedding-001` — fixes 404 NOT_FOUND on free tier API key
+- `EMBEDDING_MODEL` constant added — single source of truth for both phases
+- `[response.embeddings[0].values]` — fixes ChromaDB query format error
+- `n_results` reduced from 5 to 3 — prevents Stage 4 RAG bloating self.messages context
+- `client.heartbeat()` added in `embed_and_store()` — verifies DB connection before write
+- `import datetime` removed — was unused
+
+**`agent.py`**
+- `time.sleep(25)` removed from Fan-Out loop — redundant, throttling belongs in `summarize_text()`
+- Stage 4 print label fixed — now prints "🔍 Stage 4 — Querying your document..." instead of "Stage 4 of 3"
+- `completed_future.result(timeout=60)` → `timeout=120` — accounts for summarize_text() sleep(25) per URL
+- Trailing comma removed from `run()` signature
+
+#### Why These Changes
+
+| Change | Reasoning |
+|---|---|
+| Rule 13 added | Rule 12 footer was triggering on Stage 2/3 failures — wrong scope. Stage 1 success must not be invalidated by downstream failures |
+| Stage 4 explicit in TOOL CALL ORDER | "On-Demand" instruction caused LLM to batch search_documents in Stage 1 Fan-Out — explicit Stage 4 with prohibition fixed it |
+| summarize_text inner try/except | Single URL failure was discarding all successful results — partial success should return partial data |
+| sleep(25) in summarize_text | Stage 1 parallel calls were firing 6 simultaneous Gemini requests — exceeded 5 RPM free tier limit |
+| gemini-embedding-001 | text-embedding-004 returned 404 on this API key version — not available on v1beta API |
+| Plain text search_documents output | Stringified dict required LLM to parse structured data — same fragility class as Bug 12. Plain text with inline citations is directly readable |
+
+#### Phase 3 Done Criteria — Verified ✅
+1. Tool calls fire in correct stage order — no skips, no batching ✅
+2. Report content reflects actual tool output, not hallucination ✅
+3. RAG triggers when user references uploaded document ✅
+4. PDF citations appear with page numbers and filename ✅
+5. Rule 12 and Rule 13 fire correctly for the right failure cases ✅
+
+#### Key Insights
+> Rule scope matters — a rule that fires for the wrong case is as dangerous as no rule. Rule 12 footer was a false alarm when Stage 2/3 failed — it masked Stage 1's real success.
+
+> Partial success is better than total failure. summarize_text() skipping failed URLs and returning what succeeded is more useful than returning one error string when any URL fails.
+
+> The LLM will always find the most permissive interpretation of your instructions. "On-Demand" with no timing constraint was interpreted as "anytime I want." "ONLY after Stage 3, never during Stages 1, 2, or 3" is unambiguous.
+---
+## 🛠️ Complete Bug Registry table
+| Bug No  | Type of Bug  | File Name | Issue | Solution | Status |
+|---|---|---|---|---|---|
+| Bug 1 | Missing API Key | `rag.py` | `genai.Client()` called with no `api_key` — crashed on startup | Added `load_dotenv()`, `os.getenv("GEMINI_API_KEY")`, passed explicitly | ✅ |
+| Bug 2 | Wrong Exception Handlers | `tools.py` | `requests.exceptions` used in Gemini functions — never raised by Gemini client | Replaced with correct `google.api_core.exceptions` types | ✅ |
+| Bug 3 | Inconsistent Parameter Name | `tools.py`, `tools_description.py` | `risk_analysis()` used `idea` — LLM passed `startup_idea`, got `KeyError` | Renamed `idea` → `startup_idea` in function and schema | ✅ |
+| Bug 4 | Shared Future Dict | `agent.py` | `self.future` shared across concurrent calls — corrupted results | Moved to local variable inside `run()` | ✅ |
+| Bug 5 | System Prompt Duplication | `agent.py` | System prompt appended in `run()` — duplicated on every follow-up | Moved to `__init__()` — appended once per session | ✅ |
+| Bug 6 | Context Reloading Every Turn | `agent.py` | `get_context()` called on every `run()` — reloaded history repeatedly | Added `self.context_loaded` boolean flag | ✅ |
+| Bug 7 | Dead Code future.clear() | `agent.py` | `future.clear()` on already out-of-scope local variable | Removed entirely | ✅ |
+| Bug 8 | Hallucinated Tool Name Crash | `agent.py` | Unknown tool name caused `KeyError` swallowed by bare `except Exception` | Added guard — appends clean `role=tool` error message | ✅ |
+| Bug 9 | Stage Skipping | `prompts.py` | LLM skipped Stages 2–4, hallucinated full report | Added Rules 10–13, consolidated `TOOL CALL ORDER` | ✅ |
+| Bug 10 | Stage 4 Batching | `prompts.py` | `risk_analysis()` batched with Stage 3 — `mvp_context` hallucinated | Explicit Stage 4 separation instruction | ✅ |
+| Bug 11 | Silent Stage 4 Skip | `agent.py`, `prompts.py` | Stage 4 marker printed but `risk_analysis()` never called | Iteration markers + content-based diagnosis + stronger enforcement | ✅ |
+| Bug 12 | Schema Validation 400 — summarize_text JSON crash | `tools.py`, `tools_description.py`, `prompts.py` | LLM hand-constructing nested JSON from raw Tavily results — special characters broke Groq validation | Moved `summarize_text()` internal — removed as LLM-callable tool | ✅ |
+| Bug 13 | Prompt Contradiction | `prompts.py` | Rule 10 said "four stages" after pipeline reduced to 3 | Updated Rule 10 to "three stages" | ✅ |
+| Bug 14 | Stale available_functions Entry | `agent.py` | `summarize_text` left in dispatch map after removal | Removed from `available_functions` | ✅ |
+| Bug 15 | query_rag() Metadata Discarded | `rag.py` | Metadata already stored in ChromaDB discarded on retrieval — no citations possible | Returns `{"text": ..., "metadata": ...}` dicts via `zip()` | ✅ |
+| Bug 16 | Formatting Bug — Rules 9+10 Concatenated | `prompts.py` | Missing newline between Rule 9 and Rule 10 produced `"...assumption.10. Do not generate..."` — concatenated as one rule | Added newline between rules | ✅ |
+| Bug 17 | Per-URL Failure Poisoning summarize_text | `tools.py` | Single URL Gemini failure propagated to outer except — discarded all successful URL results, returned one error string | Inner `try/except` per URL in Fan-In loop — skip failures, `if not response` returns distinct fallback | ✅ |
+| Bug 18 | Stage 2/3 Skipped — search_documents Batched in Stage 1 | `prompts.py`, `tools_description.py` | LLM batched all 6 tools including search_documents into Stage 1 Fan-Out — Stage 2/3 tools received empty context | Explicit Stage 4 in TOOL CALL ORDER — "ONLY after Stage 3, never during Stages 1, 2, or 3" | ✅ |
+| Bug 19 | search_documents Output Unreadable for Citation | `tools.py` | Returning stringified list of dicts — LLM couldn't reliably extract page_number/file_name for citations | Reformatted to plain text: `[Page N, filename]: text` per chunk | ✅ |
+| Bug 20 | Rule 12 Footer Misapplied to Stage 2/3 Failures | `prompts.py`, `tools.py` | Rule 12 disclaimer triggered when Stage 2/3 tools failed even though Stage 1 succeeded with real data | Added Rule 13 — Stage 2/3 failures get per-section notes only, no footer. Normalized error strings to `"<X> unavailable — service error, no data retrieved."` | ✅ |
+| Bug 21 | Gemini RPM Exhaustion During Stage 1 | `tools.py` | analyze_market() + search_knowledge_base() run in parallel, each firing up to 3 Gemini calls — up to 6 simultaneous calls exceeded 5 RPM free tier limit | `time.sleep(25)` between Fan-Out URL submissions inside summarize_text() — partial mitigation | ⚠️ Partial |
+| Bug 22 | text-embedding-004 — 404 NOT_FOUND | `rag.py` | text-embedding-004 unavailable on free tier API key with google-genai SDK v1.75.0 | Switched to `gemini-embedding-001` — stable production alternative on free tier | ✅ |
+| Bug 23 | query_embeddings Format Wrong | `rag.py` | ChromaDB received `ContentEmbedding` object instead of raw float list — TypeError on query | Fixed to `[response.embeddings[0].values]` — extracts float list, wraps in list for ChromaDB format | ✅ |
+---
 ## 🎯 Phase 4 Entry Checklist
 
 Before starting Phase 4 — complete these:
 
-1. **Confirm `query_rag()` citation fix end-to-end** — upload a real PDF, query it, verify `{"text": ..., "metadata": ...}` dicts are returned and citations appear correctly in agent response
-2. **Resolve Phase 4 backlog items in order:**
-   - `task_type` in `embed_content()` — add `RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY`
-   - Batch duplicate ID failure in `embed_and_store()` — implement per-chunk upsert
-   - Conversation history persistence — SQLite or disk
-3. **Answer before starting Phase 4** — right now BizRadar ingests one PDF at startup. What architectural changes are needed to support multiple PDFs with metadata filtering per document? Do not code. Reason first. Flowchart second. Code third.
+1. **Run clean end-to-end test** — LegalAid PDF + startup analysis prompt with fresh Groq quota. Confirm all 4 stages fire in order, RAG citations appear with page numbers and filename.
+2. **Resolve Phase 4 backlog in priority order:**
 
-### Questions I Have Right Now
-- How does ChromaDB `where` filtering interact with `n_results`? Does it filter before or after ranking?
-- What is the right chunk size for a pitch deck vs a research paper?
-- How do I evaluate if RAG is actually returning the right chunks?
+| # | Item | File | Priority |
+|---|---|---|---|
+| 1 | Shared rate-limiter/semaphore for Gemini RPM across both Stage 1 callers | `tools.py` | High |
+| 2 | `embed_and_store()` batch fails entirely on duplicate ID — needs per-chunk upsert | `rag.py` | High |
+| 3 | RAG query rewriting — investigate `user_input` passed to `search_documents`, improve chunk relevance | `rag.py`, `tools.py` | High |
+| 4 | `task_type` missing in `embed_content()` — `RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY` | `rag.py` | Medium |
+| 5 | Multi-PDF support — ChromaDB `where` clause filtering by filename | `rag.py`, `tools_description.py` | Medium |
+| 6 | Document-only query flow — skip pipeline, `search_documents` only | `prompts.py` | Medium |
+| 7 | `conversation_history` not persisted across process restarts | `context_manager.py` | Medium |
+| 8 | Debug print hardcodes `"search_documents returned:"` — use `function_name` variable | `agent.py` | Low |
+| 9 | Stage print labels — dynamic "Stage N of M" based on whether Stage 4 fires | `agent.py` | Low |
 
-### Session Notes
-*(Fill this in as you learn)*
-
+3. **Answer before starting Phase 4** — right now `query_rag()` searches all documents. What is the minimum change needed to make it search only one specific file using ChromaDB `where` clause? Do not code. Reason first. Flowchart second. Code third.
 ---
 
 ## 📋 Phase 5 Log — Multi-Agent Architecture
@@ -381,7 +462,9 @@ Before starting Phase 4 — complete these:
 | Phase 3 | After any structural change — immediately audit all files for stale cross-file references |
 | Phase 3 | Fixing symptoms and fixing root cause are not the same thing — always diagnose before patching |
 | Phase 3 | Injecting upstream context into downstream tools produces significantly deeper output than isolated prompts |
- 
+| Phase 3 | Rule scope matters — a rule that fires for the wrong case is as dangerous as no rule |
+| Phase 3 | Partial success is better than total failure — skip failed URLs, return what succeeded |
+| Phase 3 | The LLM finds the most permissive interpretation — "On-Demand" means "anytime." Be explicit |
 ---
 
 ## 🐛 Mistakes & Lessons
@@ -400,6 +483,9 @@ Before starting Phase 4 — complete these:
 | Phase 3 | Four separate "do not return" lines in prompt | Over-engineering enforcement | One consolidated rule beats four repetitive lines — LLMs respond to clarity, not volume |
 | Phase 3 | Character replacement attempted before root cause diagnosis | Reached for symptom fix first | Always diagnose root cause before patching symptoms |
 | Phase 3 | Rule 10 not updated after Stage 2 removal | Forgot to audit cross-file references after structural change | After any structural change audit all files immediately |
+| Phase 3 | Rule 12 footer triggered on Stage 2/3 failures | Wrong rule scope — Stage 1 success does not invalidate Stage 2/3 failures | Each rule must have a precisely scoped trigger condition |
+| Phase 3 | search_documents batched in Stage 1 | "On-Demand" with no timing constraint interpreted as "anytime" | Be explicit — "ONLY after Stage 3, never during Stages 1, 2, or 3" |
+| Phase 3 | handle_document_upload() inside while True loop | One-time setup placed inside repeated loop | Startup operations belong before the loop — never inside it |
 
 ---
 
@@ -431,16 +517,13 @@ Before starting Phase 4 — complete these:
 
 ---
 
-## 🎯 Next 3 Things — Before Phase 4
+## 🎯 Next — Phase 4 Start
 
-1. **Run the complete system end to end with a real PDF.** Test every path. Document every error and diagnose root cause before fixing anything.
-2. **Push complete codebase to GitHub** including `rag.py`. Verify `.gitignore` is excluding `database/chroma_db/` and `.env`.
-3. **Reason through this before next session** — right now BizRadar ingests one PDF at startup. What happens if a user wants to analyze three different pitch decks and compare them? What architectural changes would that require? Do not code. Just reason.
-
+Phase 3 is closed. Phase 4 Entry Checklist is above. Begin with item 1.
 ---
 
 <div align="center">
 
-<sub>Updated after every session. Honest entries only. — BizRadar AI v3.5.0 | Phase 3 Complete | Phase 4 Next</sub>
+<sub>Updated after every session. Honest entries only. — BizRadar AI v3.6.0 | Phase 3 Closed | Phase 4 Next</sub>
 
 </div>
