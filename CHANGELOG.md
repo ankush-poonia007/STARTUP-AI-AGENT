@@ -4,6 +4,55 @@ All notable changes to BizRadar AI are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 ---
+## [v3.6.0] — 2026-06-14 — Phase 3 Closure, RAG Integration & CLI Rewrite
+
+### Added
+- Rule 11 in `prompts.py` — explicit prohibition: search_documents() never called during Stages 1, 2, or 3
+- Rule 13 in `prompts.py` — Stage 2/3 failure handling distinct from Rule 12 footer
+- Stage 4 explicitly defined in `TOOL CALL ORDER` — "ONLY after Stage 3, never during Stages 1, 2, or 3"
+- Chain of thought block in `SYSTEM_PROMPT` — LLM reasons about required stages before acting
+- Per-section fallback notes in output format for Rule 13 failures
+- Inner `try/except` per URL in `summarize_text()` Fan-In — failed URLs skipped, not propagated to caller
+- All-failed guard in `summarize_text()` — `if not response` returns distinct fallback string
+- Context guard in `analyze_market()` and `search_knowledge_base()` — error strings flagged before reaching LLM as market data
+- 503 retry backoff in `_call_gemini_with_retry()` alongside existing 429 retry
+- `time.sleep(25)` between Fan-Out URL submissions in `summarize_text()` — partial Gemini RPM mitigation
+- `client.heartbeat()` in `rag.py` `embed_and_store()` — verifies ChromaDB connection before write
+- `EMBEDDING_MODEL` constant in `rag.py` — single source of truth for both ingestion and retrieval phases
+- Cross-stage prohibitions added to all tool descriptions in `tools_description.py`
+- ASCII art banner, animated spinner, styled input prompts, turn counter in `app.py`
+- Full keyboard interrupt handling in `app.py` — Ctrl+C, Ctrl+D, EOF all handled cleanly
+- `handle_exit()` shared exit function — consistent shutdown from all exit paths
+
+### Changed
+- All Stage 2/3 error returns normalized to `"<X> unavailable — service error, no data retrieved."` — matches Rule 13 pattern
+- `search_documents()` return format changed from stringified dict to plain text `[Page N, filename]: text` — enables direct LLM citation
+- `text-embedding-004` → `gemini-embedding-001` in `rag.py` — 404 NOT_FOUND on free tier API key
+- `n_results` reduced from 5 to 3 in `query_rag()` — prevents Stage 4 RAG results bloating self.messages context
+- `completed_future.result(timeout=60)` → `timeout=120` in `agent.py` — accounts for sleep(25) per URL in summarize_text()
+- Stage 4 print label fixed in `agent.py` — now prints "🔍 Stage 4 — Querying your document..." correctly
+- `time.sleep(25)` removed from `agent.py` Fan-Out loop — redundant, throttling belongs in `tools.py`
+- `import datetime` removed from `rag.py` — unused import
+- `handle_document_upload()` moved outside `while True` loop in `app.py` — was prompting for upload on every conversation turn
+
+### Fixed
+- Bug 16 — Formatting: missing newline between Rule 9 and Rule 10 concatenated them as one rule
+- Bug 17 — Per-URL failure in `summarize_text()` discarded all successful results — inner try/except fixes partial failure
+- Bug 18 — `search_documents` batched in Stage 1 Fan-Out — explicit Stage 4 with prohibition fixed ordering
+- Bug 19 — `search_documents` stringified dict output unreadable for citation — plain text format fixes it
+- Bug 20 — Rule 12 footer triggered on Stage 2/3 failures — Rule 13 added for correct scoping
+- Bug 21 — Gemini RPM exhaustion during Stage 1 parallel calls — sleep(25) partial mitigation
+- Bug 22 — `text-embedding-004` returned 404 NOT_FOUND — switched to `gemini-embedding-001`
+- Bug 23 — `query_embeddings` received `ContentEmbedding` object — fixed to `[response.embeddings[0].values]`
+
+### Verified
+- 4-stage pipeline (3+1) confirmed working — correct order, RAG triggers on document reference
+- PDF citations appear with page numbers and filename in final report
+- Rule 12 and Rule 13 fire correctly for their respective failure cases
+- Phase 3 closed ✅
+
+---
+
 ## [v3.5.0] — 2026-06-13 — Pipeline Verified & RAG Citation Fix
 
 ### Changed
@@ -99,7 +148,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ### Added
 - `rag.py` — complete RAG pipeline built from scratch
   - `ingest_pdf()` — PDF to paragraph chunks via pdfplumber
-  - `embed_and_store()` — chunks to vectors via Gemini text-embedding-004, stored in ChromaDB
+  - `embed_and_store()` — chunks to vectors via Gemini embeddings, stored in ChromaDB
   - `query_rag()` — user question to top 5 relevant chunks via cosine similarity
 - `search_documents` tool in `tools.py` — connects RAG pipeline to ReAct agent
 - `search_documents` JSON schema in `tools_description.py`
@@ -114,8 +163,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - `requirements.txt` was missing `groq`, `google-genai`, `tavily-python`, `chromadb`, `pdfplumber`
-
-## [v2.0.0] — Phase 2 Complete
+---
+## [v2.0.0] — 2026-06-07 — Phase 2 Complete
 
 ### Added
 - ReAct agent loop in `agent.py` — `while True` with tool_calls detection
@@ -132,7 +181,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [v1.0.0] — Phase 1 Complete
+## [v1.0.0] — 2026-06-01 — Phase 1 Complete
 
 ### Added
 - `agent.py` — core agent class with manual tool execution
