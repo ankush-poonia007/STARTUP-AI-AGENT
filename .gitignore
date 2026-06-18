@@ -12,6 +12,9 @@ template.md
 database/
 database/chroma_db/
 
+# ── Input ──────────────────────────────────────────
+inputs/
+
 # ── Python Cache ──────────────────────────────────────
 __pycache__/
 *.pyc
