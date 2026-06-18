@@ -2,9 +2,9 @@
 
 # 🏗️ BizRadar AI — Architecture Deep Dive
 
-<sub>A technical breakdown of every design decision made in BizRadar AI v3.0.0 — what was built, why it was built that way, and what tradeoffs were made.</sub>
+<sub>A technical breakdown of every design decision made in BizRadar AI v3.6.0 — what was built, why it was built that way, and what tradeoffs were made.</sub>
 
-[![Version](https://img.shields.io/badge/Version-v3.0.0-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-v3.6.0-orange?style=for-the-badge)]()
 [![Phase](https://img.shields.io/badge/Phase_3-Complete-brightgreen?style=for-the-badge)]()
 [![Approach](https://img.shields.io/badge/Frameworks-Zero-red?style=for-the-badge)]()
 
@@ -40,7 +40,7 @@ bizradar-ai/
 ├── tools.py              ← Tool implementations (Tavily + Gemini + RAG)
 ├── tools_description.py  ← Tool schemas for LLM function calling
 ├── prompts.py            ← System prompt + output format
-├── rag.py                ← RAG pipeline (ingest, embed, store, query)
+├── rag.py                ← RAG pipeline (ingest, embed, store, query) — Stage 4
 │
 └── database/
     └── chroma_db/        ← Persistent ChromaDB vector store (gitignored)
@@ -61,13 +61,19 @@ messages built → Groq API call → tool_calls in response?
                         YES ────────────┘
                          │
                  ThreadPoolExecutor
-                 (parallel tool execution)
+                 (parallel tool execution per stage)
                          │
                  results appended to messages
                          │
                  loop back to Groq API
                          │
                         NO → return final response
+
+Pipeline stages (LLM-driven, not hardcoded):
+Stage 1 → analyze_market() + search_knowledge_base() in parallel
+Stage 2 → suggest_mvp() + recommend_tech_stack() in parallel
+Stage 3 → risk_analysis() alone
+Stage 4 → search_documents() alone, on-demand, only if user references a document
 ```
 
 <details>
@@ -110,9 +116,10 @@ with ThreadPoolExecutor() as executor:
 
 ---
 
-**3. `self.future.clear()` after each tool round**
+**3. `future` as a local variable, not `self.future`**
 
-The future dictionary is cleared after each execution round so the next loop iteration starts clean. Without this, stale futures from previous rounds accumulate.
+The future dictionary is declared fresh inside each `run()` call rather than stored as an instance attribute. `self.future` would persist across concurrent calls and risk corruption if two calls overlapped. A local variable resets cleanly every loop iteration — no manual `.clear()` needed.
+
 
 ---
 
@@ -145,6 +152,9 @@ Stores conversation history and returns the last 6 turns to the agent on each ru
 conversation_history = []
 
 def add_message(role, content):
+    if role not in ("user", "assistant"):
+        print(f"Warning: invalid role '{role}'", file=sys.stderr)
+        return
     conversation_history.append({"role": role, "content": content})
 
 def get_context():
@@ -176,13 +186,16 @@ Memory resets when the process exits. No persistent storage — intentional for 
 ```
 User Input
     ↓
-analyze_market()        ← Tavily live web search
-search_knowledge_base() ← Tavily deep search
+analyze_market()        ← Tavily live web search, self-summarizes before returning
+search_knowledge_base() ← Tavily deep search, self-summarizes before returning
 suggest_mvp()           ← Gemini 2.5 Flash prompt
 recommend_tech_stack()  ← Gemini 2.5 Flash prompt
 risk_analysis()         ← Gemini 2.5 Flash prompt
-summarize_text()        ← Gemini 2.5 Flash (parallel summarization)
-search_documents()      ← ChromaDB RAG retrieval (Phase 3)
+search_documents()      ← ChromaDB RAG retrieval — Stage 4, on-demand
+
+Internal only (not LLM-callable):
+summarize_text()        ← called inside analyze_market() and search_knowledge_base()
+                           before they return — LLM never sees this directly
 ```
 
 <details>
@@ -226,11 +239,17 @@ A single generic prompt produces generic answers. Focused framing produces exper
 **4. `search_documents()` bridges RAG and ReAct**
 
 ```python
-def search_documents(user_input: str):
+def search_documents(user_input: str) -> str:
     search_response = query_rag(user_input)
     if not search_response:
-        return "No data found. The file does not exist."
-    return search_response
+        return "No data found in document store."
+
+    # Plain text with inline citations — LLM can cite directly without parsing
+    formatted = ""
+    for chunk in search_response:
+        page, fname = chunk["metadata"]["page_number"], chunk["metadata"]["file_name"]
+        formatted += f"[Page {page}, {fname}]: {chunk['text'][:300]}\n\n"
+    return formatted
 ```
 
 The tool is intentionally thin — it delegates entirely to `query_rag()`. All RAG logic lives in `rag.py`. This keeps `tools.py` clean and `rag.py` independently testable.
@@ -244,20 +263,14 @@ When Tavily returns multiple results, each URL's content is summarized in parall
 </details>
 
 <details>
-<summary><b>⚠️ Known Issue — summarize_text() URL reference</b></summary>
+<summary><b>✅ Resolved Issues This Phase</b></summary>
 <br>
 
-Current code has a bug in the URL return line:
-
-```python
-# ❌ Bug — returns [title, content] list instead of the URL string
-URL:{message[future[complete_future]]}
-
-# ✅ Fix — the key itself is the URL
-URL:{future[complete_future]}
-```
-
-The dictionary key in `future` is the URL string. Referencing `message[url]` returns the value (a list), not the key. Fix in Phase 4 cleanup.
+| Issue | Fix |
+|---|---|
+| Per-URL failure poisoning entire summarize_text() result | Inner try/except per URL — failures skipped, partial success preserved |
+| All-URLs-failed case returned no signal | `if not response:` returns distinct fallback string for downstream guard |
+| Stage 2/3 errors masked as Stage 1 failures | Rule 13 added — distinct per-section handling, no shared footer |
 
 </details>
 
@@ -278,15 +291,16 @@ PHASE 1 — Ingestion (runs once per document)
 PDF → pdfplumber → paragraph chunks → Gemini embeddings → ChromaDB
 
 PHASE 2 — Retrieval (runs every query)
-User question → Gemini embedding → cosine search → top 5 chunks → LLM
+User question → Gemini embedding → cosine search → top 3 chunks → LLM
 ```
 
 ### Complete Implementation
 
 ```python
 # Setup — runs once at module load
+EMBEDDING_MODEL = "gemini-embedding-001"
 client = chromadb.PersistentClient(path="./database/chroma_db")
-gemini_client = genai.Client()
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 collection = client.get_or_create_collection(name="data_storage")
 
 # Phase 1a — PDF to chunks
@@ -308,9 +322,10 @@ def ingest_pdf(file_path: str) -> list:
 
 # Phase 1b — chunks to ChromaDB
 def embed_and_store(new_chunks: list):
+    client.heartbeat()  # verify DB connection before write
     texts = [item["text"] for item in new_chunks]
     response = gemini_client.models.embed_content(
-        model="text-embedding-004",
+        model=EMBEDDING_MODEL,
         contents=texts
     )
     ids, embeddings, documents, metadatas = [], [], [], []
@@ -332,14 +347,17 @@ def embed_and_store(new_chunks: list):
 # Phase 2 — query
 def query_rag(user_input: str):
     response = gemini_client.models.embed_content(
-        model="text-embedding-004",
+        model=EMBEDDING_MODEL,
         contents=[user_input]
     )
     results = collection.query(
-        query_embeddings=response.embeddings,
-        n_results=5
+        query_embeddings=[response.embeddings[0].values],
+        n_results=3
     )
-    return results["documents"][0]
+    return [
+        {"text": text, "metadata": metadata}
+        for text, metadata in zip(results["documents"][0], results["metadatas"][0])
+    ]
 ```
 
 <details>
@@ -350,10 +368,12 @@ def query_rag(user_input: str):
 |---|---|
 | `PersistentClient` over `Client()` | Data must survive between sessions |
 | `get_or_create_collection` | Safe for repeated initialization — no crash on restart |
-| `text-embedding-004` | Consistent with existing Gemini stack in `tools.py` |
+| `gemini-embedding-001` | `text-embedding-004` returned 404 NOT_FOUND on free tier API key — switched to stable production alternative |
 | Same model for Phase 1 and Phase 2 | Different models produce different vector spaces — similarity search breaks |
 | MD5 hash of chunk text as ID | Prevents duplicates even when the same PDF is renamed |
 | Flat list structure for chunks | Simplifies the embedding loop — no nested iteration |
+| `n_results=3` (reduced from 5) | Prevents Stage 4 RAG results from bloating self.messages and crowding out Stage 2/3 reasoning room |
+| `client.heartbeat()` before write | Verifies ChromaDB connection live before ingestion — clear error instead of cryptic mid-write failure |
 | pdfplumber over PyPDF2 | Better handling of complex PDF layouts like pitch decks |
 | `\n\n` paragraph chunking | Each paragraph contains one complete idea — meaningful retrieval unit |
 | `try/except DuplicateIDError` | Graceful duplicate handling — user gets a clear message instead of a crash |
@@ -419,13 +439,13 @@ This rule forces the LLM to use Tavily's URLs as citations — reducing hallucin
 | No framework | Deep understanding | More boilerplate code |
 | Gemini for analysis tools | High quality output | Additional API dependency |
 | `\n\n` paragraph chunking | Simple, fast | Fails on tables, headers, bullet lists |
-| Top-5 RAG retrieval | Covers most answers | May miss answer if it needs more chunks |
+| Top-3 RAG retrieval | Covers most answers, lighter context footprint | May miss answer if it needs more chunks |
 
 ---
 
 ## 🔮 What Changes in Phase 4+
 
-| Component | Current (v3.0.0) | Phase 4+ |
+| Component | Current (v3.6.0) | Phase 4+ |
 |---|---|---|
 | `query_rag()` | Searches all documents | Metadata filter by filename |
 | `app.py` | Single PDF at startup | Multiple PDFs, session management |
@@ -439,6 +459,6 @@ This rule forces the LLM to use Tavily's URLs as citations — reducing hallucin
 
 <div align="center">
 
-<sub>BizRadar AI v3.0.0 — Architecture Document</sub>
+<sub>BizRadar AI v3.6.0 — Architecture Document</sub>
 
 </div>
