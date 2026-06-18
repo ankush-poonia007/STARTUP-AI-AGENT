@@ -22,7 +22,7 @@
 <br><br>
 
 <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/></a>
-[![Version](https://img.shields.io/badge/Version-v3.5.0-brightgreen?style=for-the-badge)]() 
+[![Version](https://img.shields.io/badge/Version-v3.6.0-brightgreen?style=for-the-badge)]()
 <img src="https://img.shields.io/badge/Phase_3-Complete-brightgreen?style=for-the-badge" alt="Phase 3"/>
 <img src="https://img.shields.io/badge/Phase_4-Next-blue?style=for-the-badge" alt="Phase 4"/>
 <img src="https://img.shields.io/badge/Frameworks-Zero-red?style=for-the-badge" alt="No Frameworks"/>
@@ -89,7 +89,7 @@ bizradar-ai/
 ├── 🛠️  tools.py               # Tool layer — Tavily search + Gemini analysis (self-summarizing) + RAG search
 ├── 📋 tools_description.py    # Tool schemas for LLM tool-calling (JSON format)
 ├── 📝 prompts.py              # System prompt + output format templates
-├── 🗄️  rag.py                  # RAG pipeline — ingest, embed, store, query
+├── 🗄️  rag.py                  # RAG pipeline — ingest, embed, store, query (Stage 4)
 │
 ├── 📁 database/
 │   └── chroma_db/             # Persistent ChromaDB vector store (local, gitignored)
@@ -165,7 +165,7 @@ bizradar-ai/
 │  # Suggested MVP         │           │  query_rag()              │
 │  # Tech Stack            │           │                           │
 │  # Risks                 │           │  ChromaDB Persistent      │
-│  # Cited Sources         │           │  text-embedding-004       │
+│  # Cited Sources         │           │  gemini-embedding-001     │
 └──────────────────────────┘           └───────────────────────────┘
 ```
 
@@ -178,7 +178,7 @@ bizradar-ai/
 | Language | Python 3.10+ | Core runtime |
 | LLM Inference | Groq — Llama 3.3 70B | Ultra-fast ReAct reasoning via LPU |
 | Analysis Tools | Gemini 2.5 Flash | MVP, tech stack, risk generation |
-| Embeddings | Google text-embedding-004 | Text → vectors for semantic search |
+| Embeddings | Google gemini-embedding-001 | Text → vectors for semantic search |
 | Web Search | Tavily API | Real-time market research + citations |
 | Vector Store | ChromaDB Persistent | Document chunk storage and retrieval |
 | PDF Parsing | pdfplumber | Text extraction from pitch decks |
@@ -242,24 +242,24 @@ Enter Your File Path: ./pitch_deck.pdf
 
 You: What is the revenue projection in my pitch deck?
 
-🤖 Thinking...
-🔧 Calling tool: search_documents
+⚙️  Stage 1 of 3 — Executing tools...
+   🔧 analyze_market()
+   🔧 search_knowledge_base()
+   ✅ Stage 1 complete.
 
-📊 BizRadar AI:
-Based on your uploaded pitch deck, the revenue projection for Year 3
-is ₹4.2 Cr, driven by a subscription model targeting 12,000 active users.
-[Source: pitch_deck.pdf, Page 8]
+⚙️  Stage 2 of 3 — Executing tools...
+   🔧 suggest_mvp()
+   🔧 recommend_tech_stack()
+   ✅ Stage 2 complete.
 
----
+⚙️  Stage 3 of 3 — Executing tools...
+   🔧 risk_analysis()
+   ✅ Stage 3 complete.
 
-You: AI-powered tiffin service for students
+🔍 Stage 4 — Querying your document...
+   🔧 search_documents()
+   ✅ Report ready.
 
-🤖 Thinking...
-🔧 Calling tool: analyze_market
-🔧 Calling tool: search_knowledge_base
-🔧 Calling tool: suggest_mvp
-🔧 Calling tool: recommend_tech_stack
-🔧 Calling tool: risk_analysis
 
 📊 BizRadar AI:
 
