@@ -4,8 +4,7 @@ requests>=2.31.0            # HTTP error handling in tools.py
 
 # ── LLM Providers ─────────────────────────────────────
 groq>=0.9.0                 # Groq LPU inference — Llama 3.3 70B
-google-genai>=1.0.0         # Gemini 2.5 Flash + text-embedding-004
-
+google-genai>=1.0.0         # Gemini 2.5 Flash + gemini-embedding-001
 # ── Web Search ────────────────────────────────────────
 tavily-python>=0.3.0        # Tavily Search API — real-time market research
 
