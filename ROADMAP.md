@@ -6,8 +6,7 @@
 
 [![Phase](https://img.shields.io/badge/Current_Phase-4_Next-blue?style=for-the-badge)]()
 [![Status](https://img.shields.io/badge/Phase_3-Complete-brightgreen?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-v3.0.0-orange?style=for-the-badge)]()
-
+[![Version](https://img.shields.io/badge/Version-v3.6.0-orange?style=for-the-badge)]()
 </div>
 
 ---
@@ -185,7 +184,7 @@
 | Decision | Reasoning |
 |---|---|
 | `PersistentClient` | Data must survive between sessions |
-| `text-embedding-004` | Consistent with existing Gemini stack |
+| `gemini-embedding-001` | `text-embedding-004` returned 404 on free tier API key — switched to stable alternative |
 | MD5 hash as chunk ID | Prevents duplicates even with renamed files |
 | pdfplumber over PyPDF2 | Better complex PDF layout handling |
 | `\n\n` paragraph chunking | One complete idea per chunk |
@@ -374,6 +373,5 @@ Results compared and synthesized in final response
 
 <div align="center">
 
-<sub>BizRadar AI v3.0.0 — Phase 3 Complete | Phase 4 Next</sub>
-
+<sub>BizRadar AI v3.6.0 — Phase 3 Closed | Phase 4 Next</sub>
 </div>
