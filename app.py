@@ -37,9 +37,13 @@ import sys
 import time
 import threading
 
-from agent import StartupAgent
-from context_manager import add_message
-from rag import ingest_pdf, embed_and_store
+from src.core.orchestrator import StartupAgent
+from src.core.context_manager import add_message
+from src.rag.rag import (
+    ingest_pdf,
+    embed_and_store,
+    get_available_files,
+)
 
 
 # ── VISUAL HELPERS ────────────────────────────────────────────
@@ -161,26 +165,13 @@ def handle_document_upload() -> None:
         Calling this inside the conversation loop would prompt for upload on every turn.
     """
 
-    print_divider("📄 Document Upload", char="═")
-    time.sleep(0.1)
+    while True:
+        print_divider("📄 Document Upload", char="═")
+        time.sleep(0.1)
 
-    # ── YES/NO PROMPT ─────────────────────────────────────────
-    try:
-        file_choice = input("  Do you have a document to upload? (YES / NO) : ").lower().strip()
-
-    except KeyboardInterrupt:
-        print()
-        handle_exit("⚡ Whoa, in a hurry? Session ended.")
-
-    except EOFError:
-        print()
-        handle_exit("📭 You closed the input stream. Did your keyboard fall asleep? Shutting down.")
-
-    # ── FILE PATH PROMPT ──────────────────────────────────────
-    if file_choice == "yes":
-
+        # ── YES/NO PROMPT ─────────────────────────────────────────
         try:
-            file_path = input("  Enter your file path : ").strip()
+            file_choice = input("  Do you have a document to upload? (YES / NO) : ").lower().strip()
 
         except KeyboardInterrupt:
             print()
@@ -190,34 +181,49 @@ def handle_document_upload() -> None:
             print()
             handle_exit("📭 You closed the input stream. Did your keyboard fall asleep? Shutting down.")
 
-        # ── PDF INGESTION ─────────────────────────────────────
-        # Ctrl+C during ingestion is caught separately — ChromaDB may have
-        # partial data written. User needs to know before exiting.
-        try:
-            print("\n  📥 Ingesting document...", flush=True)
+        # ── FILE PATH PROMPT ──────────────────────────────────────
+        if file_choice == "yes":
+
+            try:
+                file_path = input("  Enter your file path : ").strip()
+
+            except KeyboardInterrupt:
+                print()
+                handle_exit("⚡ Whoa, in a hurry? Session ended.")
+
+            except EOFError:
+                print()
+                handle_exit("📭 You closed the input stream. Did your keyboard fall asleep? Shutting down.")
+
+            # ── PDF INGESTION ─────────────────────────────────────
+            # Ctrl+C during ingestion is caught separately — ChromaDB may have
+            # partial data written. User needs to know before exiting.
+            try:
+                print("\n  📥 Ingesting document...", flush=True)
+                time.sleep(0.2)
+
+                # Phase 1 — extract paragraph chunks from PDF
+                file_chunks = ingest_pdf(file_path=file_path)
+
+                # Phase 2 — embed chunks and store in ChromaDB
+                result = embed_and_store(file_chunks)
+
+                print(f"\n  ✅ {result}")
+                time.sleep(0.3)
+
+            except KeyboardInterrupt:
+                print()
+                print_divider("⚠️  Ingestion Interrupted", char="═")
+                print("  ChromaDB may contain partial data from this document.")
+                print("  To start clean: delete ./database/chroma_db/ and re-ingest.")
+                print_divider(char="═")
+                time.sleep(0.5)
+                handle_exit("Session ended after interrupted ingestion.")
+
+        else:
+            print("\n  ℹ️  No document selected.\n")
             time.sleep(0.2)
-
-            # Phase 1 — extract paragraph chunks from PDF
-            file_chunks = ingest_pdf(file_path=file_path)
-
-            # Phase 2 — embed chunks and store in ChromaDB
-            result = embed_and_store(file_chunks)
-
-            print(f"\n  ✅ {result}")
-            time.sleep(0.3)
-
-        except KeyboardInterrupt:
-            print()
-            print_divider("⚠️  Ingestion Interrupted", char="═")
-            print("  ChromaDB may contain partial data from this document.")
-            print("  To start clean: delete ./database/chroma_db/ and re-ingest.")
-            print_divider(char="═")
-            time.sleep(0.5)
-            handle_exit("Session ended after interrupted ingestion.")
-
-    else:
-        print("\n  ℹ️  No document selected. Web search tools are active.\n")
-        time.sleep(0.2)
+            break
 
     print_divider(char="═")
     time.sleep(0.2)
@@ -252,7 +258,7 @@ def main() -> None:
     # ── DOCUMENT UPLOAD ───────────────────────────────────────
     # Called once before the conversation loop — not inside the loop.
     # Ensures RAG vectors are ready before the first user query.
-    handle_document_upload()
+    # handle_document_upload()
 
     # ── AGENT INIT ────────────────────────────────────────────
     # Instantiated after upload so RAG vectors are ready before first query
@@ -261,6 +267,12 @@ def main() -> None:
 
     # ── CONVERSATION LOOP ─────────────────────────────────────
     while True:
+
+        # ── DOCUMENT UPLOAD ───────────────────────────────────────
+        # Called once before the conversation loop — not inside the loop.
+        # Ensures RAG vectors are ready before the first user query.
+        handle_document_upload()
+        
 
         # ── INPUT PROMPT ──────────────────────────────────────
         try:
@@ -297,9 +309,11 @@ def main() -> None:
         try:
             time.sleep(0.3)
             spin_thread.start()
-
+            current_file_list = get_available_files(user_input=user_input)
+            # =====================================================================
             # Blocking call — returns final answer string when all stages complete
-            response = agent.run(user_input)
+            # =====================================================================
+            response = agent.run(user_input,current_file_list)
 
         except KeyboardInterrupt:
             # Ctrl+C while agent is running — stop spinner first, then clean exit

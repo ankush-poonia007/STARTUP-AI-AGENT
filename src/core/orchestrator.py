@@ -58,10 +58,10 @@ from groq import (
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 
-from prompts import SYSTEM_PROMPT
-from context_manager import get_context
-from tools_description import tools
-from tools import (
+from src.prompts.prompts import SYSTEM_PROMPT, FILE_PROMPT
+from src.core.context_manager import get_context
+from src.tools.tools_description import tools
+from src.tools.tools import (
     search_knowledge_base,
     analyze_market,
     suggest_mvp,
@@ -78,10 +78,96 @@ from tools import (
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY_1 = os.getenv("GROQ_API_KEY_1")
+GROQ_API_KEY_2 = os.getenv("GROQ_API_KEY_2")
+GROQ_API_KEY_3 = os.getenv("GROQ_API_KEY_3")
+GROQ_API_KEY_4 = os.getenv("GROQ_API_KEY_4")
+GROQ_API_KEY_5 = os.getenv("GROQ_API_KEY_5")
 
-client = Groq(api_key=GROQ_API_KEY)
+client = Groq(api_key=GROQ_API_KEY_3)
 
+
+def validate_stage_tools( stage: int, tool_call_list: list, document_access_allowed: bool ) -> dict:
+    STAGE_MAP = {
+        1: ["analyze_market", "search_knowledge_base"],
+        2: ["suggest_mvp", "recommend_tech_stack"],
+        3: ["risk_analysis"],
+        4: ["search_documents"]
+    }
+    
+    TOOL_TO_STAGE = {tool: stg for stg, tools in STAGE_MAP.items() for tool in tools}
+    current_stage_tools = STAGE_MAP.get(stage, [])
+    messages = []
+    valid = True
+    called_current_stage_tools = set()
+
+    # 1. Process tools that the LLM actually called
+    for tool_call in tool_call_list:
+        tool_id = tool_call.id
+        tool_name = tool_call.function.name
+        
+        if ( tool_name == "search_documents" and not document_access_allowed ):
+            valid = False
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_id,
+                "name": tool_name,
+                "content": (
+                    "Error: search_documents is not allowed. "
+                    "The user did not request information from uploaded documents."
+                )
+            })
+
+            continue
+        
+        # Scenario A: Tool belongs to the current stage (Appends confirmation)
+        if tool_name in current_stage_tools:
+            called_current_stage_tools.add(tool_name)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_id,
+                "name": tool_name,
+                "content": f"Success: '{tool_name}' is correct for Stage {stage}."
+            })
+            
+        # Scenario B: Tool belongs to a different stage
+        elif tool_name in TOOL_TO_STAGE:
+            valid = False
+            correct_stage = TOOL_TO_STAGE[tool_name]
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_id,
+                "name": tool_name,
+                "content": f"Error: The tool '{tool_name}' does not belong to Stage {stage}. It must only be called during Stage {correct_stage}."
+            })
+            
+        # Scenario C: Completely unrecognized tool
+        else:
+            valid = False
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_id,
+                "name": tool_name,
+                "content": f"Error: The tool '{tool_name}' is not recognized in this workflow."
+            })
+
+    # 2. Check for missing tools from the current stage
+    missing_tools = []
+    for tool in current_stage_tools:
+        if tool not in called_current_stage_tools:
+            missing_tools.append(tool)
+            valid = False 
+            messages.append({
+                "role": "user",
+                "content": f"System Correction: You missed calling '{tool}'. It is required for Stage {stage} and must be executed now."
+            })
+
+    return {
+        "valid": valid,
+        "message": messages,
+        "missing_tool_call": missing_tools
+    }
 
 # ── AGENT CLASS ───────────────────────────────────────────────
 
@@ -147,7 +233,7 @@ class StartupAgent:
 
     # ── MAIN AGENT LOOP ───────────────────────────────────────
 
-    def run(self, user_input: str) -> str:
+    def run(self, user_input: str, current_files:str) -> str:
         """Drives the full agentic loop — tool calls and all — until final answer.
 
         Parameters:
@@ -211,27 +297,61 @@ class StartupAgent:
 
             # Step 2: Append current user turn to history
             self.messages.append({"role": "user", "content": user_input})
-
+            
+            length = len(self.messages)
+            temp_list = self.messages.copy()
+            
+            if current_files:
+                
+                print(
+                    f"[DOC ACCESS] Allowed: {bool(current_files)}"
+                )
+                
+                print(
+                    f"[DOC ACCESS] Files: {current_files}"
+                )
+                
+                file_prompt = FILE_PROMPT.format(current_available_files= current_files)
+                temp_list[0] = {
+                    "role":"system", 
+                    "content": SYSTEM_PROMPT + "\n\n" + file_prompt,
+                    }
+                
             # Step 3: Agentic loop — LLM drives the sequence; exits when no tool calls remain
             stage = 1
+            stage_print_flag  = True
             while True:
 
                 # ── STAGE HEADER ──────────────────────────────
                 # Stage 4 is on-demand (search_documents) — label it distinctly
                 # so the terminal output clearly separates pipeline from RAG query.
-                if stage == 1 or stage == 2 or stage == 3:
-                    print(f"\r⚙️  Stage {stage} of 3 — Executing tools...          ")
-                elif stage == 4:
-                    print("\r🔍 Stage 4 — Querying your document...               ")
+                if stage in [1, 2, 3]:
+                    if stage_print_flag:
+                        print(f"\r⚙️  Stage {stage} of 3 — Executing tools...          ")
+                        stage_print_flag = False
+                    else:
+                        print(f"\r🔁 Stage {stage} Retry...               ")
+                    
+                elif stage == 4 and current_files:
+                    if stage_print_flag:
+                        print("\r🔍 Stage 4 — Querying your document...               ")
+                        stage_print_flag = False
+                    else:
+                        print("\r🔁 Stage 4 Retry..")
+                        
                 else:
-                    print("\r✍️  All stages complete — Generating final report...  ")
+                    if stage_print_flag:
+                        print("\r✍️  All stages complete — Generating final report...  ")
+                        stage_print_flag = False
+                    else:
+                        print(f"\r🔁 Retying the Final Response...               ")
 
                 # ── GROQ API CALL ─────────────────────────────
                 # Sends full message history + tool schemas on every iteration.
                 # The LLM reads tool results appended in the previous iteration
                 # and decides whether to call more tools or produce a final answer.
                 response = client.chat.completions.create(
-                    messages=self.messages,
+                    messages=temp_list,
                     model=self.model_name,
                     tools=tools,
                     temperature=0.3,
@@ -239,15 +359,30 @@ class StartupAgent:
                 )
 
                 response_message = response.choices[0].message
-
+                # print(type(response_message))
+                # print(len(temp_list))
+                # for i in range ( len (temp_list)):
+                    # print(type(temp_list[i]))
                 # Append raw assistant message — must preserve tool_calls metadata
                 # for Groq to correctly match tool results to their call IDs.
-                self.messages.append(response_message)
-
+                temp_list.append(response_message)
+            
                 tool_calls = response_message.tool_calls or []
-
+             
                 if tool_calls:
-
+                    
+                    valid_tool_call = validate_stage_tools( 
+                                    stage=stage, 
+                                    tool_call_list=tool_calls, 
+                                    document_access_allowed=bool(current_files)
+                            )
+                    
+                    # print(valid_tool_call)
+                    if not valid_tool_call["valid"]:
+                        temp_list.extend(valid_tool_call["message"]) 
+                        continue 
+                    
+                    
                     # ── FAN-OUT ───────────────────────────────
                     # Submit all tool calls from this LLM response simultaneously.
                     # future dict maps each Future object → tool_call_id.
@@ -260,17 +395,24 @@ class StartupAgent:
 
                             function_name = tool_call.function.name
 
+                            if function_name == "search_documents":
+                                print(
+                                    f"[DOC TOOL] search_documents requested"
+                                )
+
                             # Guard: LLM occasionally hallucinates tool names not in the dispatch map.
                             # Appending a clean error message lets the LLM self-correct on next iteration
                             # instead of crashing with a KeyError swallowed by the outer except.
-                            if function_name not in self.available_functions:
-                                self.messages.append({
-                                    "role":        "tool",
-                                    "content":     f"Error: tool '{function_name}' does not exist.",
-                                    "tool_call_id": tool_call.id,
-                                })
-                                continue
-
+                            # if function_name not in self.available_functions:
+                            #     temp_list.append({
+                            #         "role":        "tool",
+                            #         "content":     f"Error: tool '{function_name}' does not exist.",
+                            #         "tool_call_id": tool_call.id,
+                            #     })
+                            #     continue
+                            
+                            # Above Step can be removed when we apply the valid stage function 
+                            
                             function_to_call = self.available_functions[function_name]
                             function_args    = json.loads(tool_call.function.arguments)
 
@@ -290,7 +432,7 @@ class StartupAgent:
 
                             # role=tool with matching tool_call_id — required by Groq message format.
                             # The LLM reads these on the next iteration to reason about results.
-                            self.messages.append({
+                            temp_list.append({
                                 "role":        "tool",
                                 "content":     str(function_response),
                                 "tool_call_id": tool_call_id,
@@ -298,6 +440,7 @@ class StartupAgent:
 
                     print(f"   ✅ Stage {stage} complete.")
                     stage += 1
+                    stage_print_flag = True
                     # Step 6: Loop back — LLM sees tool results and decides next action
 
                 else:
@@ -306,6 +449,11 @@ class StartupAgent:
                     # No tool calls in this response — LLM has enough information.
                     # Return the content string as the final structured report.
                     print("   ✅ Report ready.\n")
+                    
+                    self.messages.extend(
+                        temp_list[length:]
+                    )
+                    
                     return response_message.content
 
         # ── EXCEPTION HANDLING ────────────────────────────────

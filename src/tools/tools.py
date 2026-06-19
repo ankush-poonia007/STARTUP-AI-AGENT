@@ -59,7 +59,7 @@ from google import genai
 from tavily import TavilyClient
 from dotenv import load_dotenv
 
-from rag import query_rag
+from src.rag.rag import query_rag
 
 
 # ── CLIENT SETUP ──────────────────────────────────────────────
@@ -70,10 +70,30 @@ from rag import query_rag
 load_dotenv()
 
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 
 # Explicit api_key passed to avoid ambiguity with GOOGLE_API_KEY env var
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+# analyze_market() -> summarize_text()
+GEMINI_API_KEY_1 = os.getenv("GEMINI_API_KEY_1")
+gemini_analyze_client = genai.Client(api_key=GEMINI_API_KEY_1)
+
+# search_knowledge_base() - > summarize_text()
+GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2")
+gemini_search_knowledge_client = genai.Client(api_key=GEMINI_API_KEY_2)
+
+# suggest_mvp()
+GEMINI_API_KEY_3 = os.getenv("GEMINI_API_KEY_3")
+gemini_mvp_client = genai.Client(api_key=GEMINI_API_KEY_3)
+
+# recommend_tech_stack()
+GEMINI_API_KEY_4 = os.getenv("GEMINI_API_KEY_4")
+gemini_tech_stack_client = genai.Client(api_key=GEMINI_API_KEY_4)
+
+# risk_analysis
+GEMINI_API_KEY_5 = os.getenv("GEMINI_API_KEY_5")
+gemini_risk_client = genai.Client(api_key=GEMINI_API_KEY_5)
+
+
 tavily_client = TavilyClient(TAVILY_API_KEY)
 
 
@@ -82,7 +102,7 @@ tavily_client = TavilyClient(TAVILY_API_KEY)
 # and search_knowledge_base() before each returns its result.
 # Removed from tools_description.py — the LLM never sees this function.
 
-def summarize_text(message: dict) -> str:
+def summarize_text(message: dict,client) -> str:
     """Summarizes multiple web pages in parallel using Gemini. Internal use only.
 
     Called by analyze_market() and search_knowledge_base() to convert raw
@@ -128,7 +148,7 @@ def summarize_text(message: dict) -> str:
         web content (Bug 12 / Bug 4). Moving summarization internal eliminates
         this fragility entirely.
     """
-
+    
     try:
 
         def _call_gemini_with_retry(prompt: str, max_retries: int = 3):
@@ -143,7 +163,7 @@ def summarize_text(message: dict) -> str:
             """
             for attempt in range(max_retries):
                 try:
-                    return gemini_client.models.generate_content(
+                    return client.models.generate_content(
                         model="gemini-2.5-flash",
                         contents=prompt
                     )
@@ -274,7 +294,7 @@ def analyze_market(startup_idea: str) -> str:
             message[result["url"]] = [result["title"], "\nResult:\nContent: " + content]
 
         # Summarize internally — returns clean str, not raw dict
-        result = summarize_text(message)
+        result = summarize_text(message,gemini_analyze_client)
 
         # Context guard — prevents error strings from reaching downstream tools as market data.
         # Covers all known error prefixes from summarize_text() and Gemini exception handlers.
@@ -359,7 +379,7 @@ def search_knowledge_base(query: str) -> str:
             message[result["url"]] = [result["title"], "\nResult:\nContent: " + content]
 
         # Summarize internally — returns clean str, not raw dict
-        result = summarize_text(message)
+        result = summarize_text(message,gemini_search_knowledge_client)
 
         # Context guard — same logic as analyze_market().
         # Covers all known error prefixes from summarize_text() and Gemini exception handlers.
@@ -423,7 +443,7 @@ def suggest_mvp(startup_idea: str, market_context: str = "") -> str:
         Role-prompting nudges the model toward focused, 3-month-buildable
         recommendations rather than exhaustive feature lists.
     """
-
+    
     # Build advisor prompt — inject market data if available
     market_section = market_context if market_context else "No market data available."
     full_prompt = f"""You are a startup advisor. Based on this idea: {startup_idea},
@@ -436,7 +456,7 @@ in under 3 months with a small team. Focus on core value delivery only."""
 
     for attempt in range(3):
         try:
-            response = gemini_client.models.generate_content(
+            response = gemini_mvp_client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=full_prompt,
             )
@@ -515,7 +535,7 @@ Focus entirely on speed to market, ease of development, scalability, and minimal
 
     for attempt in range(3):
         try:
-            response = gemini_client.models.generate_content(
+            response = gemini_tech_stack_client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=full_prompt,
             )
@@ -604,7 +624,7 @@ and hidden bottlenecks, and provide clear, actionable mitigation strategies for 
 
     for attempt in range(3):
         try:
-            response = gemini_client.models.generate_content(
+            response = gemini_risk_client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=full_prompt,
             )
@@ -643,7 +663,7 @@ and hidden bottlenecks, and provide clear, actionable mitigation strategies for 
 
 # ── RAG TOOL ──────────────────────────────────────────────────
 
-def search_documents(user_input: str) -> str:
+def search_documents(user_input: str,file_name:str) -> str:
     """Queries the local RAG vector store for relevant chunks from uploaded PDFs.
 
     Stage 4 tool — called on-demand, ONLY after Stages 1, 2, and 3 have completed.
@@ -683,8 +703,9 @@ def search_documents(user_input: str) -> str:
 
     print("   🔍 Querying local document store...")
 
+    print(f"User Query: {user_input}\nWhere{file_name}")
     # Delegate to RAG pipeline — returns list of {text, metadata} dicts
-    search_response = query_rag(user_input)
+    search_response = query_rag(user_input=user_input, where={"file_name":file_name})
 
     # Guard against empty results — handles case where no PDF was ingested
     if not search_response:

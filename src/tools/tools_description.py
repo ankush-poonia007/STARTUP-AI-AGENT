@@ -225,9 +225,13 @@ tools = [
                     "user_input": {
                         "type": "string",
                         "description": "The user's natural language query to search within the uploaded document store."
+                    },
+                    "file_name": {
+                        "type": "string",
+                        "description": "which file do the function need to query in."
                     }
                 },
-                "required": ["user_input"]
+                "required": ["user_input","file_name"]
             }
         }
     }

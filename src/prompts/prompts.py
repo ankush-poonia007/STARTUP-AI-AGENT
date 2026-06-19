@@ -122,7 +122,7 @@ Stage 3 — Call risk_analysis() alone. Do not combine with Stage 2.
            Do not call search_documents() in this stage.
 
 Stage 4 — Only if the user referenced an uploaded document or pitch deck:
-           Call search_documents(user_input=<user's document-related question>).
+           Call search_documents(user_input=<user's document-related question>,where=<relevent file name to search in>).
            AFTER Stage 3 has completed.
            Call it exactly once. Do not batch with any other tool.
            If user did not reference a document — skip Stage 4 entirely
@@ -193,4 +193,14 @@ LIMITATIONS:
 
 USER_PROMPT_TEMPLATE = """
 Question: {question}
+"""
+
+FILE_PROMPT = """
+Available files:
+{current_available_files}
+
+CRITICAL FILE RULES:
+Rule 1: You MUST call the 'search_documents' tool ONLY when the user explicitly asks to look up, search, or summarize information contained within their uploaded files, documents, or decks. For general web searches, market research, or external questions, use your other search tools instead.
+Rule 2: When calling 'search_documents', you must copy the filename EXACTLY as listed above, including its file extension. Do not alter, shorten, or guess names.
+Rule 3: Never invent filenames. If a user asks about a file or topic not explicitly listed under 'Available files', do not call the tool; instead, inform them that the requested document is missing.
 """
