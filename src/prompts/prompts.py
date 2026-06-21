@@ -15,9 +15,17 @@
 #  Constants:
 #  - SYSTEM_PROMPT         → full agent instruction set, injected once at session start
 #  - USER_PROMPT_TEMPLATE  → wrapper for the user's question, formatted at call time
+#  - FILE_PROMPT           → Phase 4 addition. Formatted with the live list of uploaded
+#                            filenames and combined with SYSTEM_PROMPT for the current
+#                            turn only — injected into a disposable temp_list[0] in
+#                            orchestrator.py's run(), never into the permanent
+#                            self.messages[0]. Only included when current_files is
+#                            non-empty for that turn.
 #
 #  Used by:
-#  - agent.py → injects SYSTEM_PROMPT as the system role message at session start
+#  - orchestrator.py → injects SYSTEM_PROMPT as the system role message at session start;
+#                      formats FILE_PROMPT with current_files and combines it with
+#                      SYSTEM_PROMPT for turns where uploaded documents are relevant
 #
 #  Pipeline overview (defined in SYSTEM_PROMPT TOOL CALL ORDER):
 #  Stage 1 — analyze_market() + search_knowledge_base() in parallel
@@ -93,41 +101,99 @@ steps silently:
 4. Have all required stages completed before I generate my final answer?
 
 TOOL CALL ORDER:
-# Execute all tools in all stages in order. Do not skip, reorder, or merge stages.
-# Do not return any response to the user until every required stage has been called and returned.
-# Stage 1 is parallel (Fan-Out). Stages 2 and 3 depend on the previous stage (Fan-In).
-# Stage 4 is on-demand — only when user references an uploaded document.
-# analyze_market() and search_knowledge_base() each return a summarized string directly.
-# Combine both Stage 1 outputs into one string and pass as market_context to Stage 2 tools.
+
+# Execute stages strictly in order.
+# Never skip a stage.
+# Never merge stages.
+# Never call a tool from a future stage.
+# Do not generate a final answer until all required stages have completed.
 
 Stage 1 — Call analyze_market() AND search_knowledge_base() in parallel.
-           Wait for both to return before proceeding to Stage 2.
-           Do not call any Stage 2, 3, or 4 tools in this stage.
-           EXCEPTION: If both Stage 1 tools returned the unavailable fallback
-           string (Rule 12) — skip Stages 2 and 3, go directly to final answer
-           with the Rule 12 disclaimer. Do not hallucinate market data. 
+
+           Wait for BOTH tool results.
+
+           Do not call any Stage 2, Stage 3, or Stage 4 tools.
+
+           EXCEPTION:
+           If BOTH Stage 1 tools return the unavailable fallback
+           string (Rule 12), stop the workflow and generate the final
+           answer with the Rule 12 disclaimer.
+           
+           If only one Stage 1 tool fails, continue normally using the
+           available Stage 1 output.
+
 
 Stage 2 — Call suggest_mvp() AND recommend_tech_stack() in parallel.
-           Both MUST receive market_context=<combined Stage 1 outputs>.
-           Do not call Stage 2 tools before Stage 1 has fully completed.
-           Wait for both to return before proceeding to Stage 3.
-           Do not call risk_analysis() or search_documents() in this stage.
-           
-           
-Stage 3 — Call risk_analysis() alone. Do not combine with Stage 2.
-           MUST receive market_context=<combined Stage 1 outputs>
-           AND mvp_context=<Stage 2 suggest_mvp() output>.
-           Do not call risk_analysis() before Stage 2 has fully completed.
-           Wait for it to return before proceeding.
-           Do not call search_documents() in this stage.
 
-Stage 4 — Only if the user referenced an uploaded document or pitch deck:
-           Call search_documents(user_input=<user's document-related question>,where=<relevent file name to search in>).
-           AFTER Stage 3 has completed.
-           Call it exactly once. Do not batch with any other tool.
-           If user did not reference a document — skip Stage 4 entirely
-           and proceed directly to the final answer after Stage 3.
+           Both tools MUST receive:
+           market_context=<combined Stage 1 outputs>
 
+           Wait for BOTH tool results.
+
+           Do not call risk_analysis().
+
+           Do not call search_documents().
+
+           Do not generate the final answer.
+
+
+Stage 3 — Call risk_analysis() only.
+
+           MUST receive:
+           market_context=<combined Stage 1 outputs>
+
+           AND
+
+           mvp_context=<Stage 2 suggest_mvp() output>
+
+           Wait for the tool result.
+
+           Do not call search_documents().
+
+           Do not generate the final answer.
+
+           After Stage 3 completes:
+           - If the user referenced a document, file, attachment, or pitch deck,
+             proceed to Stage 4.
+           - Otherwise proceed directly to the Final Answer stage.
+
+
+Stage 4 — Document Retrieval Stage.
+
+           This stage exists ONLY for document-related requests.
+
+           Call search_documents() exactly once.
+
+           Required arguments:
+           user_input=<document-related question>
+
+           where=<exact filename from Available Files>
+
+           Stage 4 MUST execute AFTER Stage 3 completes.
+
+           Stage 4 MUST run alone.
+
+           Do not call analyze_market().
+           Do not call search_knowledge_base().
+           Do not call suggest_mvp().
+           Do not call recommend_tech_stack().
+           Do not call risk_analysis().
+
+           Wait for the search_documents() result.
+
+           After Stage 4 completes, proceed to the Final Answer stage.
+
+
+Final Answer Stage
+
+           Generate the final report using all completed stage outputs.
+
+           No tool calls are allowed during this stage.
+
+           If Stage 4 was executed, include a separate
+           "From Your Pitch Deck" section.
+
+           If Stage 4 was skipped, do not mention document analysis.
 OUTPUT FORMAT:
 Think step by step before writing each section — use the actual tool
 output for that section, not general knowledge or training memory.
@@ -194,6 +260,15 @@ LIMITATIONS:
 USER_PROMPT_TEMPLATE = """
 Question: {question}
 """
+
+# ── FILE PROMPT (Phase 4) ──────────────────────────────────────
+# Formatted with the live list of available uploaded filenames and combined
+# with SYSTEM_PROMPT for the current turn only, by orchestrator.py's run().
+# Only injected when current_files is non-empty — get_available_files()
+# upstream (in rag.py) already ran the document-relevance classifier before
+# this string was built, so by the time it reaches here Stage 4 is either
+# fully unlocked or this constant is never used at all that turn.
+# Usage: FILE_PROMPT.format(current_available_files="deck1.pdf, deck2.pdf")
 
 FILE_PROMPT = """
 Available files:
