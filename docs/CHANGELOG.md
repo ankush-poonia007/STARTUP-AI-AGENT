@@ -4,6 +4,54 @@ All notable changes to BizRadar AI are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 ---
+## [v4.0.0] — 2026-06-19 — Phase 4: Multi-PDF, Stage Gating & RAG Hardening
+
+### Added
+- `validate_stage_tools(stage, tool_call_list)` in `agent.py` — real gatekeeping logic replacing the old print-only stage counter. Per-`tool_call` check against `STAGE_MAP`, reverse-lookup `TOOL_TO_STAGE` for naming the correct stage in rejection messages, whole-batch rejection, missing-tool detection injected as `role: "user"`
+- `where={"file_name": ...}` filtering added to `query_rag()`'s `collection.query()` call — enables document-scoped retrieval across multiple uploaded PDFs in a single shared ChromaDB collection
+- `get_available_files(user_input)` upgraded with a relevance classifier — separate Gemini call returns real filenames only when the query is document-relevant, `""` otherwise
+- `classify_document_relevance()` — standalone Gemini classifier function backing the upgraded `get_available_files()`
+- Non-mutating file-list injection pattern in `run()` — `temp_list = self.messages.copy()`, conditional replace of `temp_list[0]` only if files exist, ReAct loop runs on `temp_list`, `self.messages.extend(temp_list[length:])` on exit
+- `evaluator.py` — offline RAG evaluation tool. Hardcoded ground-truth query/page/filename pairs, calls `query_rag()` directly, calculates recall@3
+- Paragraph-aware fixed-token chunker in `rag.py` — `CHUNK_SIZE=250`, `OVERLAP=50`, `STEP=200`; small paragraphs kept whole, large paragraphs split via sliding window
+- Shared `stage_print_flag` in `agent.py` — distinguishes fresh stage prints from gating-retry prints, replacing the earlier broken Stage-4-only fix
+- `SYSTEM_PROMPT` now passed as a proper `role: "system"` message in the final-answer generation call, alongside `final_prompt` as `role: "user"`
+
+### Changed
+- `function_args` for `market_context` / `mvp_context` / `startup_idea` now forcibly overwritten in code immediately before tool execution — bypasses LLM argument construction entirely, eliminating hallucinated context
+- Earlier system-message-injection approach for context passing removed as dead weight once forced-argument-overwrite was confirmed working — reduces token overhead
+
+### Fixed
+- Bug A — hallucinated `market_context`/`mvp_context` — fixed via forced argument overwrite (see Changed above)
+- Bug B (Part 1) — missing system prompt in final-answer generation call caused ungrounded output; real Tavily URL now correctly appears in Market Potential
+- Stage-gating gap — `stage` was previously a print-label counter with no enforcement power; real LLM tendency to bundle `risk_analysis` + `search_documents` at Stage 3 now correctly caught and rejected, LLM retries correctly
+- Chunking granularity — a 2-page PDF previously produced only 2 chunks under pure `\n\n` splitting; now produces properly granular chunks under the new chunker, with recall@3 unchanged at 100%
+
+### Verified
+- Cross-document RAG isolation — 100% of retrieved chunks matched the requested file across multi-PDF tests, zero contamination
+- `evaluator.py` — 100% recall@3 across 5 documents, 25 questions, full corpus evaluation
+- `temp_list`/`self.messages` isolation — `self.messages[0]` confirmed static across multiple turns; file list correctly reaches the LLM each call
+- Document-relevance classifier — 3 of 4 known test cases pass
+
+### Reclassified
+- Rate-limit/token-budget concern — moved out of open-code-bugs tracking. Only concrete evidence collected is a Groq TPD quota error, which is a billing/quota constraint, not a `temp_list` architecture defect
+
+### Known Issues (Open)
+- Citation bug — "From Your Pitch Deck" output has no page/filename citations despite explicit `SYSTEM_PROMPT` rule
+- Bug B (Part 2) — Competitor Insights still leaks document citations instead of its own `search_knowledge_base()` URL; unverified against current forced-overwrite architecture, needs fresh re-diagnosis
+- Retrieval relevance/chunking drift — correct theme retrieved, but specific details paraphrase loosely rather than tightly grounding in retrieved chunks
+- Classifier edge case — ambiguous "analyze this idea..." phrasing intermittently misclassifies as relevant; deferred pending a structural safety net
+
+### Deliberate Scope Decisions (Accepted Risk)
+- Stage 2/3 context truncated to 1000 chars at injection, on top of existing 2000-char storage truncation — deferred to post-persistence work
+- `search_documents`'s `file_name` argument left LLM-trusted, not validated against the actual file list — deferred until `get_available_files()` supports multi-document summary-based selection
+
+### Phase 4 Remaining
+- Hybrid search (BM25 + vector search) — cleared to start, chunking dependency resolved
+- Reranking (cross-encoder on top-k results) — depends on hybrid search
+
+---
+
 ## [v3.6.0] — 2026-06-14 — Phase 3 Closure, RAG Integration & CLI Rewrite
 
 ### Added
