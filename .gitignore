@@ -35,4 +35,6 @@ _vscode/
 # ── Build / Package ───────────────────────────────────
 dist/
 build/
-*.egg-info/
+*.egg-info/tempCodeRunnerFile.py 
+src/rag/tempCodeRunnerFile.py 
+data/chroma_db/ 
