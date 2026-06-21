@@ -4,9 +4,9 @@
 
 <sub>A personal record of concepts learned, decisions made, mistakes caught, and what comes next. Updated after every meaningful session or milestone.</sub>
 
-[![Phase](https://img.shields.io/badge/Current_Phase-4_Next-blue?style=for-the-badge)]()
+[![Phase](https://img.shields.io/badge/Current_Phase-4_In_Progress-blue?style=for-the-badge)]()
 [![Phase 3](https://img.shields.io/badge/Phase_3-Complete-brightgreen?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-v3.6.0-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-v4.0.0-orange?style=for-the-badge)]()
 </div>
 
 ---
@@ -23,7 +23,7 @@
 Phase 1 ✅ Complete
 Phase 2 ✅ Complete
 Phase 3 ✅ Complete — Closed
-Phase 4 🔜 Next
+Phase 4 🔄 In Progress
 Phase 5 📋 Planned
 Phase 6 📋 Planned
 ```
@@ -411,6 +411,145 @@ Before starting Phase 4 — complete these:
 3. **Answer before starting Phase 4** — right now `query_rag()` searches all documents. What is the minimum change needed to make it search only one specific file using ChromaDB `where` clause? Do not code. Reason first. Flowchart second. Code third.
 ---
 
+## 🔄 Phase 4 Log — Multi-PDF, Stage Gating & RAG Hardening
+
+**Status:** In Progress — BizRadar AI v4.0.0
+
+### 🎯 Milestone
+
+Multi-PDF ingestion with document-scoped retrieval via metadata filtering, stage-order enforcement, and RAG evaluation tooling — building on the closed Phase 3 pipeline.
+
+---
+
+### ✅ Completed & Verified This Phase
+
+#### 1. Cross-Document Isolation (`where` Filter)
+
+`embed_and_store()` already tagged chunks with `file_name` + `page_number` metadata in a single shared collection. Rejected a per-file-collection design after cost/benefit reasoning — added `where={"file_name": ...}` to `query_rag()`'s `collection.query()` call instead.
+
+**Verified live:** 100% of retrieved chunks matched the requested file, zero cross-document contamination.
+
+#### 2. File-List Awareness For The LLM
+
+Built `get_available_files()` using `.get(include=["metadatas"])` + `set()` dedup. Designed a non-mutating injection pattern in `run()`:
+
+```python
+length = len(self.messages)
+temp_list = self.messages.copy()
+temp_list[0] = {...}  # new dict, not mutated in place
+# ReAct loop runs on temp_list
+self.messages.extend(temp_list[length:])
+```
+
+**Verified live** across multiple turns — `self.messages[0]` stays permanently static; `temp_list[0]` carries the dynamic file list each call. Caught and fixed a real shallow-copy mutation bug along the way: `temp_list[0]["content"] = X` mutates the shared dict in place (bug); `temp_list[0] = {...}` (assigning a brand new dict) does not (fix).
+
+#### 3. Stage-Order Enforcement (`validate_stage_tools`)
+
+Diagnosed that `stage` was previously just a print-label counter with **zero gatekeeping power** — the actual root cause of an intermittent staging violation that had been silently present since Phase 3 (a "closed" bug that was never actually reliably re-verified).
+
+Built `validate_stage_tools(stage, tool_call_list)`:
+- Per-`tool_call` check against a `STAGE_MAP`
+- Reverse-lookup (`TOOL_TO_STAGE`) to name the *correct* stage in rejection messages
+- Whole-batch rejection, not per-tool
+- Missing-tool detection injected as a `role: "user"` message — correctly reasoned out of `role: "system"` and `role: "assistant"` as the wrong fit
+
+**Verified live:** caught a real, repeated LLM tendency to bundle `risk_analysis` + `search_documents` together at Stage 3, correctly rejected the batch, LLM retried correctly on the next iteration.
+
+#### 4. Document-Relevance Classifier
+
+Diagnosed that even with the file list visible, the LLM sometimes called `search_documents` on queries with no document reference at all — a prompt-rule non-compliance issue, not a missing-information issue.
+
+Rejected two flawed fixes first:
+- A `has_file_context` flag — solves the wrong problem; files persist across turns regardless of how the upload prompt was answered
+- A per-turn manual user question — too much friction for the user
+
+Landed on a separate Gemini classifier call inside an upgraded `get_available_files(user_input)`: returns real filenames when the query is document-relevant, `""` otherwise. Went through three prompt iterations.
+
+**Status:** 3 of 4 known test cases pass. One known unreliable case remains — "analyze this idea with full tech stack and MVP suggestion" intermittently misclassifies as `true` even with explicit negative examples and `temperature=0.0`. **Conclusion:** not unsolvable, but evidence that prompt-only classification has a real, non-zero error rate. Needs a structural safety net eventually (e.g. a second-opinion check using actual retrieval similarity scores), not more prompt tuning. Logged as a known limitation — deferred, not blocking.
+
+#### 5. Stage Print-Flag Fix
+
+Replaced the earlier broken "Stage 4 only" fix with a single shared `stage_print_flag`: initializes `True` before the loop, flips `False` after the first print of any stage, resets `True` after `stage += 1` on the successful path. Retry messages now print distinctly from fresh stage messages — no more misleading repeated "Stage N — Executing tools..." lines during a gating rejection/retry cycle.
+
+#### 6. `evaluator.py` — Built And Verified
+
+Offline, standalone RAG evaluation tool. Takes hardcoded ground-truth query–answer pairs (question + correct page + correct filename), calls `query_rag()` directly, checks metadata match, calculates recall@3.
+
+**Verified: 100% recall@3 across 5 documents, 25 questions**, full corpus evaluation, zero cross-document contamination.
+
+#### 7. Chunking Improvement (`rag.py`)
+
+Replaced pure `\n\n` paragraph splitting with a paragraph-aware fixed-token chunker — `CHUNK_SIZE=250`, `OVERLAP=50`, `STEP=200`. Small paragraphs kept whole; large paragraphs split via sliding window.
+
+**Verified:** a 2-page PDF that previously produced only 2 chunks now produces properly granular chunks. Evaluator re-run confirmed 100% recall@3 post-migration — the chunking change did not regress retrieval quality.
+
+#### 8. Bug A — Hallucinated Context (Fixed)
+
+Fixed via forced argument overwrite: `function_args` is forcibly overwritten in code right before tool execution, bypassing LLM argument construction entirely for `market_context` / `mvp_context` / `startup_idea`. An earlier system-message-injection approach was correctly identified as dead weight once the forced-overwrite approach was confirmed working, and removed — eliminating wasted token overhead.
+
+#### 9. Bug B (Part 1) — Missing System Prompt In Final Call (Fixed)
+
+`SYSTEM_PROMPT` is now passed as a proper `"role": "system"` message alongside `final_prompt` as `"role": "user"` in the final-answer generation call. **Confirmed via test run:** a real Tavily URL correctly appeared in the Market Potential section.
+
+---
+
+### ⚠️ Reclassified — Not A Code Bug
+
+**Rate-limit / token-budget concern.** The only concrete evidence collected is a Groq TPD quota error — this is a **billing/quota constraint, not a `temp_list` architecture defect**. Moved out of the open-code-bugs table to avoid implying it's still architectural. The deterministic stress test (forcing `MAX_STAGE_RETRIES` to confirm or rule out an actual unbounded-growth problem) was designed across multiple sessions but **never built or run** — three sessions running now without resolution. Needs an explicit decision next session: build it, or consciously drop it from the list rather than letting it silently roll over again.
+
+---
+
+### 🔴 Open Bugs
+
+| # | Bug | File(s) | Priority | Status |
+|---|---|---|---|---|
+| 1 | Citation bug — "From Your Pitch Deck" output has no page/filename citations despite explicit `SYSTEM_PROMPT` rule requiring them | `prompts.py`, `agent.py` | High | Open |
+| 2 | Bug B (Part 2) — Competitor Insights leaks document citations instead of its own `search_knowledge_base()` URL | `agent.py`, `prompts.py` | High | **Unverified against the current forced-overwrite architecture — must be re-diagnosed fresh, not assumed to be the same bug seen earlier** |
+| 3 | Retrieval relevance / chunking drift — correct theme retrieved, but specific details paraphrase loosely rather than tightly grounding in actual retrieved chunks | `rag.py` | Medium | Open |
+| 4 | Classifier edge case — ambiguous "analyze this idea..." phrasing intermittently misclassifies as `true` | `rag.py` | Medium | Deferred — needs a structural safety net, not more prompt tuning |
+
+---
+
+### 📝 Deliberate Scope Decisions (Accepted Risk, Not Oversight)
+
+1. **Stage 2/3 context truncated to 1000 chars at injection**, on top of the existing 2000-char storage truncation — intentional, deferred to post-persistence work.
+2. **`search_documents`'s `file_name` argument left LLM-trusted**, not validated against the actual file list — intentional, deferred until `get_available_files()` is upgraded to support multi-document summary-based selection rather than filename-only matching.
+
+---
+
+### 🔜 Remaining Phase 4 Implementation
+
+| # | Item | Depends On |
+|---|---|---|
+| 1 | Hybrid search (BM25 + vector search) | Chunking improvement ✅ — cleared to start |
+| 2 | Reranking (cross-encoder on top-k results) | Hybrid search |
+
+---
+
+### 📋 Standing Rules (Upgraded This Phase)
+
+1. **Flowchart before code** — Input / Output / Steps written and verified before any function is coded. No exceptions.
+2. **Session checklist first** — build an ordered checklist before diving into any new phase or session.
+3. **Small, clear questions** — multiple related small questions allowed together; no dense paragraph-style bundles of unrelated things.
+4. **Explicit answer feedback** — correct parts confirmed, wrong parts named precisely, no silent moving on.
+5. **Low-pressure session opens** — new chat starts with one simple question confirming prior session completion, not forceful interrogation.
+
+---
+
+### 🔁 Recurring Pattern — Tracked Across Multiple Sessions This Phase
+
+Proposing an architectural fix **before** diagnosing the actual root cause of a symptom. Confirmed instances this phase: per-file collections, the upload-flag, the `has_file_context` flag, "remove Stage 4 from validation," merging Stage 3+4, the stage-print-flag mechanism (twice), proposing hybrid chunking before confirming paragraph splitting was the real problem.
+
+Every single time, self-correction happened once directly challenged with "what's the actual evidence this mechanism touches that function?" — that questioning reflex is real growth from earlier phases. The *first instinct* toward unjustified complexity is still present, though. Standing fix: before proposing any mechanism, explicitly answer "which function is producing this symptom, and what evidence do I have that this fix touches that function?" — out loud, before writing code.
+
+### ✅ Before Next Phase 4 Session
+
+1. Re-run the LegalAid/AGI test, check Competitor Insights specifically for its own `search_knowledge_base()` URL (Open Bug #2 above) — unverified against current architecture.
+2. Decide explicitly on the deterministic retry-forcing test — build it or formally drop it. Don't let it roll over a fourth time.
+3. Confirm the rate-limit issue is correctly filed as a quota issue, not sitting in any table implying architectural fault.
+
+---
+
 ## 📋 Phase 5 Log — Multi-Agent Architecture
 
 **Status:** Not Started
@@ -465,6 +604,12 @@ Before starting Phase 4 — complete these:
 | Phase 3 | Rule scope matters — a rule that fires for the wrong case is as dangerous as no rule |
 | Phase 3 | Partial success is better than total failure — skip failed URLs, return what succeeded |
 | Phase 3 | The LLM finds the most permissive interpretation — "On-Demand" means "anytime." Be explicit |
+| Phase 4 | A counter that only labels stages but doesn't gate them is decoration, not enforcement — `validate_stage_tools` closed a real, previously-unverified gap |
+| Phase 4 | Shallow-copy mutation through a dict reference is invisible until you trace it — reassigning a new dict at the index is the fix, not mutating the existing one in place |
+| Phase 4 | Prompt-only classification has a non-zero, irreducible error rate — a fourth prompt rewrite is not guaranteed to close a case three rewrites already couldn't |
+| Phase 4 | A "closed" bug from a previous phase is not guaranteed closed — re-verify under the current architecture before assuming continuity |
+| Phase 4 | Reclassifying a bug correctly (quota vs. architecture) changes where it should live in your tracking, not just its priority |
+| Phase 4 | Offline evaluation (recall@k against ground truth) is a different category of confidence than live spot-checking — build the evaluator early, not as an afterthought |
 ---
 
 ## 🐛 Mistakes & Lessons
@@ -486,6 +631,11 @@ Before starting Phase 4 — complete these:
 | Phase 3 | Rule 12 footer triggered on Stage 2/3 failures | Wrong rule scope — Stage 1 success does not invalidate Stage 2/3 failures | Each rule must have a precisely scoped trigger condition |
 | Phase 3 | search_documents batched in Stage 1 | "On-Demand" with no timing constraint interpreted as "anytime" | Be explicit — "ONLY after Stage 3, never during Stages 1, 2, or 3" |
 | Phase 3 | handle_document_upload() inside while True loop | One-time setup placed inside repeated loop | Startup operations belong before the loop — never inside it |
+| Phase 4 | Proposed per-file ChromaDB collections before checking if `where` filtering on a shared collection would work | First instinct toward more architecture instead of checking if the simpler mechanism already solves it | Always check whether the existing single-collection design can be filtered before reaching for a structural split |
+| Phase 4 | Proposed a `has_file_context` flag to fix relevance misclassification | Solved the wrong problem — files persist across turns regardless of upload-prompt history | Trace what the flag would actually condition on before building it |
+| Phase 4 | Proposed merging Stage 3 and Stage 4 print logic without confirming root cause first | Assumed the symptom (double "Stage 3" print) meant the stages should be combined, before checking if it was the gating-retry pattern | Diagnose the actual cause of a printed symptom before proposing a structural merge |
+| Phase 4 | Assumed Bug B (Part 2) was still the same bug after switching to forced-argument-overwrite | New architecture can change adjacent behavior — old diagnosis doesn't automatically transfer | Re-diagnose against the current file, don't assume bug continuity across an architecture change |
+| Phase 4 | Deterministic retry-forcing test designed three sessions running, never built | Kept losing priority to more urgent diagnosis work without an explicit decision to deprioritize it | If something rolls over repeatedly, explicitly decide to build it or drop it — don't let it default-carry forward silently |
 
 ---
 
@@ -517,13 +667,13 @@ Before starting Phase 4 — complete these:
 
 ---
 
-## 🎯 Next — Phase 4 Start
+## 🎯 Next — Phase 4 Continues
 
-Phase 3 is closed. Phase 4 Entry Checklist is above. Begin with item 1.
+Phase 4 is in progress. Multi-PDF, stage gating, evaluator, and chunking improvements are done and verified. Next session priorities: Bug B (Part 2) re-verification, the deterministic retry-forcing test decision, then hybrid search.
 ---
 
 <div align="center">
 
-<sub>Updated after every session. Honest entries only. — BizRadar AI v3.6.0 | Phase 3 Closed | Phase 4 Next</sub>
+<sub>Updated after every session. Honest entries only. — BizRadar AI v4.0.0 | Phase 3 Closed | Phase 4 In Progress</sub>
 
 </div>
