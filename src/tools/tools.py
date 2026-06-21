@@ -6,10 +6,11 @@
 #  Defines all callable tools used by the BizRadar AI agent.
 #  Each tool wraps one external API call (Gemini or Tavily) or
 #  one internal pipeline call (RAG), and returns a structured
-#  string result back to the orchestrator in agent.py.
+#  string result back to the orchestrator in orchestrator.py.
 #
 #  What this file does NOT handle:
-#  Does not orchestrate tool call order — that belongs to agent.py.
+#  Does not orchestrate tool call order or stage gating — that belongs to
+#  orchestrator.py (see validate_stage_tools()).
 #  Does not combine tool outputs into a final report.
 #  Does not manage conversation history or agent state.
 #
@@ -19,15 +20,17 @@
 #  - suggest_mvp()            → Stage 2: Gemini MVP recommendation with market context
 #  - recommend_tech_stack()   → Stage 2: Gemini tech stack recommendation with market context
 #  - risk_analysis()          → Stage 3: Gemini risk report with market + MVP context
-#  - search_documents()       → Stage 4: queries local RAG vector store for uploaded PDFs
-#                               called on-demand only after Stage 3, never during Stages 1-3
+#  - search_documents()       → Stage 4: queries local RAG vector store for a specific
+#                               uploaded PDF, scoped by file_name. Called on-demand only
+#                               after Stage 3, never during Stages 1-3.
 #
 #  Internal functions (NOT LLM-callable):
 #  - summarize_text()         → called inside analyze_market() and search_knowledge_base()
 #                               before returning — never exposed to the LLM directly
 #
 #  Used by:
-#  - agent.py → calls these tools based on LLM tool-use decisions
+#  - orchestrator.py → calls these tools based on LLM tool-use decisions, after
+#                      validate_stage_tools() confirms each call belongs to its stage
 #
 #  Pipeline Flow (3+1 stages):
 #  Stage 1: analyze_market() + search_knowledge_base() in parallel
@@ -37,13 +40,23 @@
 #  Stage 3: risk_analysis() alone
 #           (receives market_context + mvp_context from Stage 2)
 #  Stage 4: search_documents() alone, on-demand, only after Stage 3
-#           (triggered only when user references an uploaded document)
+#           (triggered only when user references an uploaded document;
+#            file_name scopes retrieval to one specific PDF — Phase 4
+#            multi-document isolation via ChromaDB where filtering)
 #
 #  Error string conventions (matched by prompts.py Rules 12 and 13):
 #  Stage 1 failure → "Summarization unavailable — service error, no data retrieved."
 #  Stage 2/3 failure → "<Tool name> unavailable — service error, no data retrieved."
 #  Both Stage 1 tools fail → Rule 12 footer triggered in final report
 #  Stage 2/3 tool fails → Rule 13 per-section note, no footer
+#
+#  Phase 4 note on multiple Gemini API keys:
+#  Each Gemini-backed tool below uses its own dedicated client / API key
+#  (gemini_analyze_client, gemini_search_knowledge_client, gemini_mvp_client,
+#  gemini_tech_stack_client, gemini_risk_client). This spreads load across
+#  separate quotas rather than funneling every Gemini call through one key —
+#  reduces (but does not eliminate) the chance of a single key's free-tier
+#  RPM/TPD limit blocking the entire pipeline in one run.
 #
 #  Imports from:
 #  - rag.py → query_rag()
@@ -69,30 +82,35 @@ from src.rag.rag import query_rag
 
 load_dotenv()
 
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+TAVILY_API_KEY    = os.getenv("TAVILY_API_KEY")
+GEMINI_API_KEY_1  = os.getenv("GEMINI_API_KEY_1")
+GEMINI_API_KEY_2  = os.getenv("GEMINI_API_KEY_2")
+GEMINI_API_KEY_3  = os.getenv("GEMINI_API_KEY_3")
+GEMINI_API_KEY_4  = os.getenv("GEMINI_API_KEY_4")
+GEMINI_API_KEY_5  = os.getenv("GEMINI_API_KEY_5")
+GEMINI_API_KEY_6  = os.getenv("GEMINI_API_KEY_6")
+GEMINI_API_KEY_7  = os.getenv("GEMINI_API_KEY_7")
+GEMINI_API_KEY_8  = os.getenv("GEMINI_API_KEY_8")
+GEMINI_API_KEY_9  = os.getenv("GEMINI_API_KEY_9")
+GEMINI_API_KEY_10 = os.getenv("GEMINI_API_KEY_10")
 
+# Explicit api_key passed to avoid ambiguity with GOOGLE_API_KEY env var.
+# Each tool gets its own dedicated client/key — see file header note above.
 
-# Explicit api_key passed to avoid ambiguity with GOOGLE_API_KEY env var
 # analyze_market() -> summarize_text()
-GEMINI_API_KEY_1 = os.getenv("GEMINI_API_KEY_1")
-gemini_analyze_client = genai.Client(api_key=GEMINI_API_KEY_1)
+gemini_analyze_client = genai.Client(api_key=GEMINI_API_KEY_7)
 
-# search_knowledge_base() - > summarize_text()
-GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2")
-gemini_search_knowledge_client = genai.Client(api_key=GEMINI_API_KEY_2)
+# search_knowledge_base() -> summarize_text()
+gemini_search_knowledge_client = genai.Client(api_key=GEMINI_API_KEY_9)
 
 # suggest_mvp()
-GEMINI_API_KEY_3 = os.getenv("GEMINI_API_KEY_3")
 gemini_mvp_client = genai.Client(api_key=GEMINI_API_KEY_3)
 
 # recommend_tech_stack()
-GEMINI_API_KEY_4 = os.getenv("GEMINI_API_KEY_4")
 gemini_tech_stack_client = genai.Client(api_key=GEMINI_API_KEY_4)
 
-# risk_analysis
-GEMINI_API_KEY_5 = os.getenv("GEMINI_API_KEY_5")
+# risk_analysis()
 gemini_risk_client = genai.Client(api_key=GEMINI_API_KEY_5)
-
 
 tavily_client = TavilyClient(TAVILY_API_KEY)
 
@@ -100,9 +118,9 @@ tavily_client = TavilyClient(TAVILY_API_KEY)
 # ── INTERNAL SUMMARIZATION ────────────────────────────────────
 # NOT an LLM-callable tool. Called internally by analyze_market()
 # and search_knowledge_base() before each returns its result.
-# Removed from tools_description.py — the LLM never sees this function.
+# Not present in tools_description.py — the LLM never sees this function.
 
-def summarize_text(message: dict,client) -> str:
+def summarize_text(message: dict, client) -> str:
     """Summarizes multiple web pages in parallel using Gemini. Internal use only.
 
     Called by analyze_market() and search_knowledge_base() to convert raw
@@ -113,6 +131,10 @@ def summarize_text(message: dict,client) -> str:
         message (dict) → URL-keyed dict where each value is [title, content_string].
                          Produced by analyze_market() or search_knowledge_base()
                          before calling this function.
+        client  (genai.Client) → the caller's dedicated Gemini client — passed in
+                         rather than using a single shared client, so analyze_market()
+                         and search_knowledge_base() draw from separate API keys/quotas
+                         even though they share this one summarization function.
 
     Returns:
         str → concatenated block of Title / Summary / URL for each page.
@@ -140,15 +162,15 @@ def summarize_text(message: dict,client) -> str:
         up to 6 simultaneous Gemini calls exceed the free tier 5 RPM limit,
         causing cascading 429 failures into Stages 2 and 3.
         sleep(25) between submissions reduces combined rate to ~6/min — partial
-        mitigation. Full fix (shared semaphore) deferred to Phase 4.
+        mitigation. A full fix (shared semaphore across all Gemini callers) is
+        logged as a Phase 4 backlog item — see LEARNING_LOG.md.
 
     Why this is internal and not LLM-callable:
         Passing raw Tavily result dicts through the LLM for JSON reconstruction
         caused 400 schema validation failures due to special characters in real
-        web content (Bug 12 / Bug 4). Moving summarization internal eliminates
-        this fragility entirely.
+        web content. Moving summarization internal eliminates this fragility entirely.
     """
-    
+
     try:
 
         def _call_gemini_with_retry(prompt: str, max_retries: int = 3):
@@ -266,7 +288,7 @@ def analyze_market(startup_idea: str) -> str:
 
     Why self-summarize before returning:
         Passing raw Tavily dicts through the LLM for JSON reconstruction caused
-        400 schema validation failures (Bug 12). Summarizing internally returns
+        400 schema validation failures. Summarizing internally returns
         a clean string the LLM can pass directly as market_context.
 
     Why context guard before returning:
@@ -294,7 +316,7 @@ def analyze_market(startup_idea: str) -> str:
             message[result["url"]] = [result["title"], "\nResult:\nContent: " + content]
 
         # Summarize internally — returns clean str, not raw dict
-        result = summarize_text(message,gemini_analyze_client)
+        result = summarize_text(message, gemini_analyze_client)
 
         # Context guard — prevents error strings from reaching downstream tools as market data.
         # Covers all known error prefixes from summarize_text() and Gemini exception handlers.
@@ -325,7 +347,7 @@ def analyze_market(startup_idea: str) -> str:
     except ValueError as e:
         return f"Configuration Error: {e}"
 
-    except Exception as e:
+    except Exception:
         return "Summarization unavailable — service error, no data retrieved."
 
 
@@ -379,7 +401,7 @@ def search_knowledge_base(query: str) -> str:
             message[result["url"]] = [result["title"], "\nResult:\nContent: " + content]
 
         # Summarize internally — returns clean str, not raw dict
-        result = summarize_text(message,gemini_search_knowledge_client)
+        result = summarize_text(message, gemini_search_knowledge_client)
 
         # Context guard — same logic as analyze_market().
         # Covers all known error prefixes from summarize_text() and Gemini exception handlers.
@@ -410,7 +432,7 @@ def search_knowledge_base(query: str) -> str:
     except ValueError as e:
         return f"Configuration Error: {e}"
 
-    except Exception as e:
+    except Exception:
         return "Summarization unavailable — service error, no data retrieved."
 
 
@@ -437,13 +459,15 @@ def suggest_mvp(startup_idea: str, market_context: str = "") -> str:
 
     Why default empty string for market_context:
         Allows standalone testing without requiring the full Stage 1 pipeline
-        to have completed first. The orchestrator passes real context in production.
+        to have completed first. The orchestrator passes real context in production
+        (and forcibly overwrites this argument before execution — see
+        orchestrator.py's run() docstring).
 
     Why startup advisor persona in prompt:
         Role-prompting nudges the model toward focused, 3-month-buildable
         recommendations rather than exhaustive feature lists.
     """
-    
+
     # Build advisor prompt — inject market data if available
     market_section = market_context if market_context else "No market data available."
     full_prompt = f"""You are a startup advisor. Based on this idea: {startup_idea},
@@ -663,8 +687,8 @@ and hidden bottlenecks, and provide clear, actionable mitigation strategies for 
 
 # ── RAG TOOL ──────────────────────────────────────────────────
 
-def search_documents(user_input: str,file_name:str) -> str:
-    """Queries the local RAG vector store for relevant chunks from uploaded PDFs.
+def search_documents(user_input: str, file_name: str) -> str:
+    """Queries the local RAG vector store for relevant chunks from one specific uploaded PDF.
 
     Stage 4 tool — called on-demand, ONLY after Stages 1, 2, and 3 have completed.
     Triggered only when the user explicitly references an uploaded document.
@@ -673,16 +697,28 @@ def search_documents(user_input: str,file_name:str) -> str:
 
     Parameters:
         user_input (str) → natural language query from the user or agent
+        file_name  (str) → the exact uploaded filename to scope retrieval to.
+                           Phase 4 addition — passed straight through to query_rag()'s
+                           where={"file_name": file_name} filter, so retrieval only
+                           searches the named document's chunks in a shared ChromaDB
+                           collection, even when multiple PDFs have been uploaded
+                           this session. Currently LLM-trusted (the LLM supplies this
+                           value itself from the filenames visible in FILE_PROMPT) —
+                           a deliberate, accepted-risk scope decision, not validated
+                           against the live file list inside this function. See
+                           LEARNING_LOG.md Phase 4 section for the full rationale and
+                           the planned hardening path via get_available_files().
 
     Returns:
         str → formatted plain text string with page citations per chunk.
               Format: "[Page N, filename]: chunk text"
-              Returns error string if the vector store is empty or unavailable.
+              Returns error string if the vector store is empty, the filename
+              doesn't match anything, or the connection is unavailable.
 
     Why plain text format (not list of dicts):
         Returning a stringified list of dicts required the LLM to parse structured
-        data from a string — same class of fragility as Bug 12. Plain text with
-        inline citations lets the LLM read and cite directly without parsing.
+        data from a string — fragile and error-prone. Plain text with inline
+        citations lets the LLM read and cite directly without parsing.
 
     Why chunk text truncated to 300 chars:
         search_documents() is called as Stage 4, after Stages 1-3 have already
@@ -696,18 +732,20 @@ def search_documents(user_input: str,file_name:str) -> str:
         should never be merged — one is offline/private, one is online/public.
 
     Why this function is thin (delegates to query_rag()):
-        All RAG pipeline logic belongs in rag.py — ingest, embed, store, retrieve.
-        Keeping this wrapper thin means tools.py stays decoupled from RAG internals.
-        rag.py can be tested and updated independently.
+        All RAG pipeline logic belongs in rag.py — ingest, embed, store, retrieve,
+        and the where-clause filtering itself. Keeping this wrapper thin means
+        tools.py stays decoupled from RAG internals. rag.py can be tested and
+        updated independently — including the Phase 4 multi-document filtering.
     """
 
-    print("   🔍 Querying local document store...")
+    print(f"   🔍 Querying local document store — file: {file_name}, query: {user_input}")
 
-    print(f"User Query: {user_input}\nWhere{file_name}")
-    # Delegate to RAG pipeline — returns list of {text, metadata} dicts
-    search_response = query_rag(user_input=user_input, where={"file_name":file_name})
+    # Delegate to RAG pipeline — file_name scopes the search to one document
+    # via query_rag()'s where clause. Returns list of {text, metadata} dicts.
+    search_response = query_rag(user_input=user_input, where={"file_name": file_name})
 
-    # Guard against empty results — handles case where no PDF was ingested
+    # Guard against empty results — handles both "no PDF was ingested at all"
+    # and "file_name didn't match anything in the collection."
     if not search_response:
         return "No data found in document store. Please check that a file was uploaded successfully."
 
@@ -715,9 +753,9 @@ def search_documents(user_input: str,file_name:str) -> str:
     # Truncate each chunk to 300 chars — prevents context window overflow at Stage 4.
     formatted_response = ""
     for chunk in search_response:
-        page   = chunk["metadata"]["page_number"]
-        fname  = chunk["metadata"]["file_name"]
-        text   = chunk["text"][:300]
+        page  = chunk["metadata"]["page_number"]
+        fname = chunk["metadata"]["file_name"]
+        text  = chunk["text"][:300]
         formatted_response += f"[Page {page}, {fname}]: {text}\n\n"
 
     return formatted_response
