@@ -4,9 +4,9 @@
 
 <sub>A phase-by-phase build path. Every phase ends with a concrete capability — something you can demonstrate, not just describe.</sub>
 
-[![Phase](https://img.shields.io/badge/Current_Phase-4_Next-blue?style=for-the-badge)]()
+[![Phase](https://img.shields.io/badge/Current_Phase-4_In_Progress-blue?style=for-the-badge)]()
 [![Status](https://img.shields.io/badge/Phase_3-Complete-brightgreen?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-v3.6.0-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-v4.0.0-orange?style=for-the-badge)]()
 </div>
 
 ---
@@ -18,7 +18,7 @@
 | Phase 1 | Foundation Agent | ✅ Complete | 100% |
 | Phase 2 | Real Tool Integrations | ✅ Complete | 100% |
 | Phase 3 | RAG & Document Intelligence | ✅ Complete | 100% |
-| Phase 4 | Multi-PDF & Advanced RAG | 🔜 Next | 0% |
+| Phase 4 | Multi-PDF & Advanced RAG | 🔄 In Progress | See breakdown below |
 | Phase 5 | Multi-Agent Architecture | 📋 Planned | 0% |
 | Phase 6 | Autonomous Research Platform | 📋 Planned | 0% |
 
@@ -198,59 +198,74 @@
 
 ---
 
-## 🔜 Phase 4 — Multi-PDF & Advanced RAG
+## 🔄 Phase 4 — Multi-PDF & Advanced RAG
 
 <div align="center">
-<sub><b>Outcome:</b> BizRadar ingests multiple PDFs in one session, compares them, and retrieves accurately across all documents using metadata filtering.</sub>
+<sub><b>Outcome:</b> BizRadar ingests multiple PDFs in one session, isolates retrieval per document, and gates document access to only the turns that actually need it.</sub>
 </div>
 
 <br>
 
-<details>
-<summary><b>📚 Concepts To Learn</b></summary>
+<details open>
+<summary><b>✅ Done & Verified</b></summary>
 <br>
 
-- [ ] Multi-document architecture — how ChromaDB handles multiple PDFs with metadata filtering
-- [ ] `where` clause filtering in ChromaDB — query only a specific document by filename
-- [ ] Chunking improvements — fixed token chunking vs semantic chunking vs paragraph chunking
-- [ ] When simple chunking fails — tables, headers, bullet points in PDFs
-- [ ] Context window management for RAG — when top-k chunks overflow LLM context
-- [ ] RAG evaluation — measuring retrieval quality, precision vs recall
-- [ ] Hybrid search — combining keyword search (BM25) with vector search
-- [ ] Reranking — why top-k is not always the best k, cross-encoder rerankers
+| # | Item | Verification |
+|---|---|---|
+| 1 | Cross-document isolation via `query_rag(where={"file_name": ...})` | 100% isolation confirmed across multiple uploaded PDFs |
+| 2 | Per-turn file-list injection (`temp_list`/`length`/`extend()` pattern in `orchestrator.py`) | `self.messages[0]` confirmed static across turns — no permanent pollution |
+| 3 | `validate_stage_tools()` real stage gating in `orchestrator.py` | Replaced print-only counter; caught real LLM stage-bundling violations |
+| 4 | Document-relevance classifier — `classify_document_relevance()` + `get_available_files(user_input)` in `rag.py` | 3 of 4 known test cases pass reliably (see Open Items) |
+| 5 | Stage print-flag fix in `orchestrator.py` | `stage_print_flag` distinguishes fresh-stage prints from gating-retry prints |
+| 6 | `evaluator.py` — Recall@3 benchmark | 100% recall@3 across 5 documents, 25 ground-truth questions, **at time of last run** |
+| 7 | Paragraph-aware fixed-token chunking in `rag.py` | Fixes dense-PDF under-chunking (a 2-page report previously produced only 2 chunks via pure `\n\n` split). `CHUNK_SIZE=250`, `OVERLAP=50`, `STEP=200`. Verified via evaluator — no regression at time of test |
+| 8 | Hallucinated-context bug — forced `function_args` overwrite for `market_context`/`mvp_context`/`startup_idea` | Fixed in `orchestrator.py` |
+| 9 | Missing system prompt in final synthesis call | Fixed — real Tavily URLs now appear correctly in final report |
+| 10 | `__main__` guard added to `rag.py`'s batch re-ingestion block | Without it, importing `rag.py` anywhere silently re-ingested 12 hardcoded files on every run — caught during Phase 4 decoration |
+
+> ⚠️ **Recall@3 status — unverified on current code.** Item 6/7's 100% figure was confirmed against an earlier `rag.py` state. The version now committed (chunking + decoration changes, commit `03329d4`) has **not** been re-run through `evaluator.py` — blocked by Gemini rate limits at time of last attempt. Treat "100% recall@3" as a past result, not a current guarantee, until re-verified.
 
 </details>
 
 <details>
-<summary><b>🔨 What To Build</b></summary>
+<summary><b>🔴 Open Bugs</b></summary>
 <br>
 
-| File | Purpose |
+| # | Bug | Priority | Notes |
+|---|---|---|---|
+| 1 | "From Your Pitch Deck" section missing page/filename citations in some runs | High | Open |
+| 2 | Competitor Insights section leaks document citations instead of its own `search_knowledge_base()` URL (Bug B Part 2) | High | **Unverified against current forced-overwrite architecture** — flagged across multiple sessions, never re-tested live |
+| 3 | Retrieval relevance drift — correct theme returned, details paraphrase loosely | Medium | Open |
+| 4 | Classifier misclassifies one ambiguous phrasing ("analyze this idea with full tech stack and MVP suggestion") | Medium | Confirmed structural, not a prompt-wording issue — temperature=0.0 and explicit FALSE examples already in place. Needs a structural safety net (e.g. retrieval-similarity second opinion), not another prompt rewrite |
+| 5 | `classify_document_relevance()`'s ~100-line prompt still hardcoded inline in `rag.py` instead of centralized in `prompts.py` as a `CLASSIFIER_PROMPT` constant | Low | Newly identified — `prompts.py` is the established source of truth for all other LLM-facing prompt strings; this one was missed |
+
+</details>
+
+<details>
+<summary><b>📝 Deliberate Scope Decisions (accepted tradeoffs, not bugs)</b></summary>
+<br>
+
+| Decision | Reasoning |
 |---|---|
-| `app.py` (updated) | Accept multiple PDF paths at startup |
-| `rag.py` (updated) | Metadata filtering in `query_rag()` for targeted document search |
-| `tools_description.py` (updated) | `search_documents` schema with optional `filename` filter |
-| `evaluator.py` (new) | Basic RAG evaluation — query → chunks → relevance check |
+| Stage 2/3 context truncated to 1000 chars at injection time (on top of 2000-char storage truncation) | Deferred to post-persistence work — not a current defect |
+| `search_documents()`'s `file_name` argument is LLM-trusted, not validated against the live file list | Deferred until `get_available_files()` supports multi-doc summary-based selection |
+
+</details>
+
+<details>
+<summary><b>🔜 Remaining Phase 4 Work</b></summary>
+<br>
+
+| Item | Status |
+|---|---|
+| Hybrid search (BM25 + vector) | Cleared to start — chunking dependency resolved |
+| Reranking (cross-encoder) | Depends on hybrid search landing first |
 
 </details>
 
 <br>
 
-**Architecture Target:**
-
-```
-User uploads 3 PDFs at startup
-        ↓
-Each ingested and stored with filename metadata
-        ↓
-User: "Compare revenue projections in deck_a.pdf and deck_b.pdf"
-        ↓
-Agent calls search_documents twice — once per file using metadata filter
-        ↓
-Results compared and synthesized in final response
-```
-
-> **Milestone:** User uploads three pitch decks. BizRadar retrieves from specific documents on demand and produces a structured comparison — no cross-document contamination.
+> **Verified Capability:** Multiple PDFs can be uploaded in one session. Retrieval is correctly isolated per document via ChromaDB's `where` filter — querying one file does not leak chunks from another. A relevance classifier gates whether Stage 4 (document retrieval) is even reachable on a given turn, rather than leaving that decision to prompt instructions alone.
 
 ---
 
@@ -352,8 +367,9 @@ Results compared and synthesized in final response
 | RAG Pipelines | Phase 3 | ✅ Unlocked |
 | ChromaDB / Vector Search | Phase 3 | ✅ Unlocked |
 | PDF Document Intelligence | Phase 3 | ✅ Unlocked |
-| Multi-Document RAG | Phase 4 | 🔜 Next |
-| RAG Evaluation | Phase 4 | 🔜 Next |
+| Multi-Document RAG | Phase 4 | ✅ Unlocked — cross-document isolation verified |
+| RAG Evaluation | Phase 4 | ✅ Unlocked — `evaluator.py` built, recall@K methodology applied (pending re-verification on current code) |
+| Document-Relevance Classification | Phase 4 | ✅ Unlocked — dedicated classifier gating pattern, with known edge-case limitation |
 | Multi-Agent Orchestration | Phase 5 | 📋 Planned |
 | Agent Communication | Phase 5 | 📋 Planned |
 | Long-Term Memory | Phase 6 | 📋 Planned |
@@ -362,16 +378,24 @@ Results compared and synthesized in final response
 
 ---
 
-## 📚 Study Before Phase 4
+## 📚 Phase 4 Entry Checklist — Status
 
-- [ ] ChromaDB `where` clause documentation — metadata filtering syntax
-- [ ] Read: "Lost in the Middle" paper — why middle chunks get ignored by LLMs
-- [ ] Build: ingest 2 PDFs manually, query with a filename filter, verify isolation
-- [ ] Answer before starting: right now `query_rag()` searches all documents. What is the minimum change needed to make it search only one specific file?
+- [x] ChromaDB `where` clause metadata filtering — implemented and verified in `rag.py`
+- [x] Ingest 2+ PDFs, query with a filename filter, verify isolation — confirmed working
+- [x] Answered: minimum change to make `query_rag()` search only one file → `where={"file_name": ...}` parameter, now in place
+
+## 🔜 Before Closing Phase 4
+
+- [ ] Re-run `evaluator.py` against current `rag.py` once Gemini quota allows — confirm 100% recall@3 still holds post-chunking-changes
+- [ ] Re-test Bug B Part 2 (Competitor Insights citation leak) against current forced-overwrite architecture — most overdue open item
+- [ ] Resolve citation bug in "From Your Pitch Deck" section
+- [ ] Decide: build the deterministic retry-forcing test, or formally drop it from tracking
+- [ ] Centralize `classify_document_relevance()`'s prompt into `prompts.py`
+- [ ] Then: hybrid search → reranking, in that order
 
 ---
 
 <div align="center">
 
-<sub>BizRadar AI v3.6.0 — Phase 3 Closed | Phase 4 Next</sub>
+<sub>BizRadar AI v4.0.0 — Phase 3 Closed | Phase 4 In Progress</sub>
 </div>
