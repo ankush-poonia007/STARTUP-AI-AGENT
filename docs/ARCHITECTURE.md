@@ -2,10 +2,10 @@
 
 # 🏗️ BizRadar AI — Architecture Deep Dive
 
-<sub>A technical breakdown of every design decision made in BizRadar AI v3.6.0 — what was built, why it was built that way, and what tradeoffs were made.</sub>
+<sub>A technical breakdown of every design decision made in BizRadar AI v4.0.0 — what was built, why it was built that way, and what tradeoffs were made.</sub>
 
-[![Version](https://img.shields.io/badge/Version-v3.6.0-orange?style=for-the-badge)]()
-[![Phase](https://img.shields.io/badge/Phase_3-Complete-brightgreen?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-v4.0.0-orange?style=for-the-badge)]()
+[![Phase](https://img.shields.io/badge/Phase_4-In_Progress-blue?style=for-the-badge)]()
 [![Approach](https://img.shields.io/badge/Frameworks-Zero-red?style=for-the-badge)]()
 
 </div>
@@ -34,24 +34,33 @@ BizRadar is intentionally built **without LangChain or LlamaIndex**. Every compo
 ```
 bizradar-ai/
 │
-├── agent.py              ← ReAct loop + tool orchestration
-├── app.py                ← CLI interface + PDF ingestion trigger
-├── context_manager.py    ← Sliding window memory
-├── tools.py              ← Tool implementations (Tavily + Gemini + RAG)
-├── tools_description.py  ← Tool schemas for LLM function calling
-├── prompts.py            ← System prompt + output format
-├── rag.py                ← RAG pipeline (ingest, embed, store, query) — Stage 4
+├── app.py                       ← CLI interface + PDF ingestion trigger
 │
-└── database/
-    └── chroma_db/        ← Persistent ChromaDB vector store (gitignored)
+├── src/
+│   ├── core/
+│   │   ├── orchestrator.py      ← ReAct loop + stage-gated tool orchestration
+│   │   └── context_manager.py   ← Sliding window memory
+│   ├── tools/
+│   │   ├── tools.py              ← Tool implementations (Tavily + Gemini + RAG)
+│   │   └── tools_description.py  ← Tool schemas for LLM function calling
+│   ├── prompts/
+│   │   └── prompts.py            ← System prompt, FILE_PROMPT, output format
+│   ├── rag/
+│   │   └── rag.py                ← RAG pipeline + Phase 4 relevance classifier
+│   └── evaluation/
+│       ├── evaluator.py          ← Recall@K evaluation tool
+│       └── ground_truth.py       ← Hand-written benchmark dataset
+│
+└── data/
+    └── chroma_db/                 ← Persistent ChromaDB vector store (gitignored)
 ```
 
 ---
 
-## 🔁 agent.py — The ReAct Loop
+## 🔁 orchestrator.py — The ReAct Loop + Stage Gating
 
 ### What It Does
-Implements the **ReAct (Reasoning + Acting)** pattern — the core intelligence loop of BizRadar.
+Implements the **ReAct (Reasoning + Acting)** pattern plus Phase 4 stage enforcement — the core intelligence loop of BizRadar.
 
 ### How It Works
 
@@ -59,6 +68,9 @@ Implements the **ReAct (Reasoning + Acting)** pattern — the core intelligence 
 messages built → Groq API call → tool_calls in response?
                                         │
                         YES ────────────┘
+                         │
+                 validate_stage_tools() gate
+                 (rejects wrong-stage / batched calls)
                          │
                  ThreadPoolExecutor
                  (parallel tool execution per stage)
@@ -69,11 +81,12 @@ messages built → Groq API call → tool_calls in response?
                          │
                         NO → return final response
 
-Pipeline stages (LLM-driven, not hardcoded):
+Pipeline stages (LLM-driven, gated by validate_stage_tools()):
 Stage 1 → analyze_market() + search_knowledge_base() in parallel
 Stage 2 → suggest_mvp() + recommend_tech_stack() in parallel
 Stage 3 → risk_analysis() alone
-Stage 4 → search_documents() alone, on-demand, only if user references a document
+Stage 4 → search_documents() alone, on-demand, only if get_available_files()
+           confirms this question requires reading an uploaded document
 ```
 
 <details>
@@ -138,6 +151,42 @@ All context — system prompt, conversation history, tool results — lives in `
 | `RateLimitError` | Too many requests | Implement backoff |
 | `BadRequestError` | Invalid parameters | Check tool schemas |
 | `APIConnectionError` | Network failure | Check internet |
+
+---
+
+**6. `validate_stage_tools()` — real stage enforcement (Phase 4)**
+
+Before Phase 4, `stage` was only a print label — it had no power to stop the LLM from calling the wrong tool or batching tools across stages. This function checks every tool call against `STAGE_MAP` before execution and rejects the whole batch if anything is out of place.
+
+```python
+def validate_stage_tools(stage, tool_call_list, document_access_allowed):
+    # checks each tool_call against STAGE_MAP[stage]
+    # rejects whole batch if any tool is wrong-stage or hallucinated
+    # detects missing required tools for the stage
+    return {"valid": bool, "message": [...], "missing_tool_call": [...]}
+```
+
+Caught a real, repeated bug: the LLM bundling `risk_analysis` + `search_documents` together in Stage 3.
+
+---
+
+**7. `temp_list` — per-turn disposable context (Phase 4)**
+
+`current_files` (which uploaded filenames are relevant) can change every turn. Injecting `FILE_PROMPT` directly into `self.messages[0]` would make that injection permanent. Instead, `run()` builds a disposable `temp_list = self.messages.copy()` each turn, conditionally replaces `temp_list[0]` with `SYSTEM_PROMPT + FILE_PROMPT`, runs the loop on `temp_list`, then extends `self.messages` with only the new turns. `self.messages[0]` stays the static system prompt forever.
+
+</details>
+
+---
+
+## 🔄 Phase 4 Additions — Multi-PDF, Stage Gating, RAG Evaluation
+
+| Capability | File | Summary |
+|---|---|---|
+| Cross-document isolation | `rag.py` | `query_rag(user_input, where)` — scopes retrieval to one filename via ChromaDB `where` filter, even with multiple PDFs in one collection |
+| Document relevance gating | `rag.py` | `classify_document_relevance()` + `get_available_files(user_input)` — a dedicated Gemini call decides per-turn whether Stage 4 should even be reachable |
+| Stage enforcement | `orchestrator.py` | `validate_stage_tools()` — real gatekeeping, not just a print counter |
+| Improved chunking | `rag.py` | Paragraph-aware fixed-token chunker (`CHUNK_SIZE=250`, `OVERLAP=50`) replacing pure `\n\n` splitting |
+| RAG evaluation | `evaluator.py`, `ground_truth.py` | Recall@K against 25 hand-written ground-truth questions across 5 documents — 100% recall@3 |
 
 </details>
 
@@ -299,11 +348,11 @@ User question → Gemini embedding → cosine search → top 3 chunks → LLM
 ```python
 # Setup — runs once at module load
 EMBEDDING_MODEL = "gemini-embedding-001"
-client = chromadb.PersistentClient(path="./database/chroma_db")
+client = chromadb.PersistentClient(path="./data/chroma_db")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 collection = client.get_or_create_collection(name="data_storage")
 
-# Phase 1a — PDF to chunks
+# Phase 1a — PDF to chunks (paragraph-aware fixed-token chunking, Phase 4)
 def ingest_pdf(file_path: str) -> list:
     file_name = os.path.basename(file_path)
     chunks = []
@@ -313,6 +362,8 @@ def ingest_pdf(file_path: str) -> list:
             if text:
                 paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
                 for para in paragraphs:
+                    # small paragraphs kept whole; large ones split via
+                    # sliding window (CHUNK_SIZE=250, OVERLAP=50)
                     chunks.append({
                         "text": para,
                         "page_number": page_number,
@@ -344,20 +395,33 @@ def embed_and_store(new_chunks: list):
     except chromadb.errors.DuplicateIDError:
         return "Document already ingested. Query directly."
 
-# Phase 2 — query
-def query_rag(user_input: str):
+# Phase 2 — query, scoped to one document via where filter (Phase 4)
+def query_rag(user_input: str, where: dict):
     response = gemini_client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=[user_input]
     )
     results = collection.query(
         query_embeddings=[response.embeddings[0].values],
+        where=where,
         n_results=3
     )
     return [
         {"text": text, "metadata": metadata}
         for text, metadata in zip(results["documents"][0], results["metadatas"][0])
     ]
+
+# Phase 4 — relevance gate, decides if Stage 4 unlocks this turn
+def get_available_files(user_input: str) -> str:
+    unique_filenames = list(set(
+        m["file_name"] for m in collection.get(include=["metadatas"])["metadatas"]
+    ))
+    if not unique_filenames:
+        return ""
+    file_list = " ".join(unique_filenames)
+    if classify_document_relevance(user_input, file_list):
+        return file_list
+    return ""
 ```
 
 <details>
@@ -378,6 +442,8 @@ def query_rag(user_input: str):
 | `\n\n` paragraph chunking | Each paragraph contains one complete idea — meaningful retrieval unit |
 | `try/except DuplicateIDError` | Graceful duplicate handling — user gets a clear message instead of a crash |
 | `if not search_response` in tool | Handles empty collection edge case before returning to agent |
+| `where={"file_name": ...}` filter | Phase 4 — isolates retrieval to one document in a shared collection, no per-file collections needed |
+| Paragraph-aware fixed-token chunking | Phase 4 — pure `\n\n` splitting under-chunked dense PDFs; sliding window fixes granularity while keeping small paragraphs whole |
 
 </details>
 
@@ -438,27 +504,26 @@ This rule forces the LLM to use Tavily's URLs as citations — reducing hallucin
 | In-memory context | Zero setup, fast | Lost on process exit |
 | No framework | Deep understanding | More boilerplate code |
 | Gemini for analysis tools | High quality output | Additional API dependency |
-| `\n\n` paragraph chunking | Simple, fast | Fails on tables, headers, bullet lists |
+| `\n\n` + fixed-token chunking | Better granularity than pure paragraph split | Still fails on tables, complex headers |
 | Top-3 RAG retrieval | Covers most answers, lighter context footprint | May miss answer if it needs more chunks |
+| Classifier-based relevance gating | Stops Stage 4 firing on unrelated queries | Prompt-only classification has a non-zero error rate on ambiguous phrasing |
 
 ---
 
-## 🔮 What Changes in Phase 4+
+## 🔮 What Changes Next (Phase 4 Remaining → Phase 5/6)
 
-| Component | Current (v3.6.0) | Phase 4+ |
+| Component | Current (v4.0.0) | Next |
 |---|---|---|
-| `query_rag()` | Searches all documents | Metadata filter by filename |
-| `app.py` | Single PDF at startup | Multiple PDFs, session management |
-| Chunking | `\n\n` paragraph split | Fixed token or semantic chunking |
-| RAG evaluation | None | Precision/recall measurement |
+| Retrieval | Vector search only | Hybrid search (BM25 + vector), then reranking |
 | `context_manager.py` | In-memory list | SQLite persistent storage (Phase 6) |
-| `agent.py` | Single agent | Orchestrator + sub-agents (Phase 5) |
+| `orchestrator.py` | Single agent | Orchestrator + sub-agents (Phase 5) |
 | `app.py` | CLI only | FastAPI REST endpoints (Phase 6) |
+| Execution | `ThreadPoolExecutor` | `asyncio` (Phase 6) |
 
 ---
 
 <div align="center">
 
-<sub>BizRadar AI v3.6.0 — Architecture Document</sub>
+<sub>BizRadar AI v4.0.0 — Architecture Document</sub>
 
 </div>
