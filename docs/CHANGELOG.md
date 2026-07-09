@@ -4,6 +4,24 @@ All notable changes to BizRadar AI are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 ---
+### Changed (REVISION_GUIDE.md — local only, not committed)
+- Fixed stale model references: text-embedding-004 → gemini-embedding-001
+  (Concepts #3, #24)
+- Fixed stale path references: ./database/chroma_db → ./data/chroma_db
+  (Concepts #5, Mechanics #26)
+- Fixed stale file references: agent.py → orchestrator.py (throughout)
+- Fixed stale n_results value: 5 → 3 (Concepts #2, #5)
+- Rewrote Concept #23 (Chunk Size Trade-offs) — pure \n\n splitting replaced
+  with paragraph-aware fixed-token sliding-window chunking explanation
+- Added 5 new Phase 4 concepts to Layer 1:
+  25. ChromaDB where Clause Filtering (Multi-Document Isolation)
+  26. Document-Relevance Classification Pattern
+  27. Recall@K Evaluation Methodology
+  28. Stage-Gating Validation Pattern
+  29. Per-Tool Dedicated API Client Pattern
+- Quick Index updated with new entries
+- Footer bumped to v4.0.0, 55 Concepts
+
 ## [v4.0.0] — 2026-06-19 — Phase 4: Multi-PDF, Stage Gating & RAG Hardening
 
 ### Added
@@ -18,6 +36,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `SYSTEM_PROMPT` now passed as a proper `role: "system"` message in the final-answer generation call, alongside `final_prompt` as `role: "user"`
 
 ### Changed
+
+- `docs/ROADMAP.md` — synced v3.6.0 → v4.0.0
+- Phase 4 status: "🔜 Next, 0%" → "🔄 In Progress" with itemized breakdown
+  (no single % — completion tracked as done / open-bug / deferred items instead)
+- Phase 4 "What To Build" (planning-stage) → "What Was Built" (actual delivered
+  functions/files) + separate "Open Items" and "Deliberate Scope Decisions" tables
+- Added explicit "Status: Unverified" note on RAG recall@3 — evaluator.py has not
+  been re-run since the chunking/decoration changes at commit 03329d4
+- Skills table — "Multi-Document RAG" and "RAG Evaluation" flipped 🔜 → ✅ Unlocked
+- Added new backlog item: classify_document_relevance() prompt still hardcoded
+  inline in rag.py rather than moved to prompts.py as a CLASSIFIER_PROMPT constant
+- Removed stale "Architecture Target" 3-PDF diagram (capability now verified,
+  not aspirational) — replaced with a short verified-capability note
+- Badges/footer updated to v4.0.0, Phase 4 In Progress
 - `function_args` for `market_context` / `mvp_context` / `startup_idea` now forcibly overwritten in code immediately before tool execution — bypasses LLM argument construction entirely, eliminating hallucinated context
 - Earlier system-message-injection approach for context passing removed as dead weight once forced-argument-overwrite was confirmed working — reduces token overhead
 

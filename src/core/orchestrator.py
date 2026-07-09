@@ -106,7 +106,7 @@ GROQ_API_KEY_3 = os.getenv("GROQ_API_KEY_3")
 GROQ_API_KEY_4 = os.getenv("GROQ_API_KEY_4")
 GROQ_API_KEY_5 = os.getenv("GROQ_API_KEY_5")
 
-client = Groq(api_key=GROQ_API_KEY_2)
+client = Groq(api_key=GROQ_API_KEY_3)
 
 
 # ── STAGE GATING (Phase 4) ─────────────────────────────────────
@@ -497,30 +497,127 @@ class StartupAgent:
                     # arguments — and make one last Groq call with no tools
                     # attached, so the LLM cannot call anything else here.
                     print("\r✍️  All stages complete — Generating final report...  ")
+                    document_section = ""
 
-                    final_prompt = f"""USER REQUEST:
+                    if current_files:
+                        document_section = f"""
+                    --------------------------------------------------
+
+                    DOCUMENT INSIGHTS
+
+                    {workflow_state['stage_4']['search_documents']}
+                    """
+                    
+                    sections = """
+# Startup Analysis
+
+## Idea Summary
+
+## Market Potential
+
+## Competitor Insights
+
+## Suggested MVP
+
+## Recommended Tech Stack
+
+## Risks
+"""
+
+                    # Add this section only if a document was actually used
+                    if current_files:
+                        sections += """
+
+## From Your Pitch Deck
+"""
+
+                    sections += """
+
+## Final Verdict
+"""
+
+                    final_prompt = f"""
+You are the final report assembler for BizRadar AI.
+
+The startup analysis has already been completed by specialist tools.
+
+Your responsibility is to assemble those outputs into a polished, professional report.
+
+You are NOT performing a new analysis.
+
+IMPORTANT RULES
+
+- Do NOT generate new facts.
+- Do NOT perform additional reasoning.
+- Do NOT summarize specialist outputs.
+- Do NOT remove important technical details.
+- Do NOT shorten sections for brevity.
+- Preserve all citations exactly as provided.
+- Preserve all mitigation strategies.
+- Preserve the structure of detailed sections such as Risk Analysis and Document Insights.
+- Only improve formatting, organization, readability, and transitions between sections.
+
+If a section is empty or unavailable, omit it completely unless explicitly instructed otherwise.
+
+--------------------------------------------------
+
+USER REQUEST
+
 {workflow_state['user_query']}
 
-MARKET ANALYSIS:
+--------------------------------------------------
+
+MARKET POTENTIAL
+
 {workflow_state['stage_1']['analyze_market']}
 
-KNOWLEDGE BASE:
+--------------------------------------------------
+
+COMPETITOR INSIGHTS
+
 {workflow_state['stage_1']['search_knowledge_base']}
 
-MVP:
+--------------------------------------------------
+
+SUGGESTED MVP
+
 {workflow_state['stage_2']['suggest_mvp']}
 
-TECH STACK
+--------------------------------------------------
+
+RECOMMENDED TECH STACK
+
 {workflow_state['stage_2']['recommend_tech_stack']}
 
+--------------------------------------------------
+
 RISK ANALYSIS
+
 {workflow_state['stage_3']['risk_analysis']}
 
-DOCUMENT SEARCH:
-{workflow_state['stage_4']['search_documents'] if current_files else "No document referenced"}
+{document_section}
 
-Now generate the final Response in structured Format
+--------------------------------------------------
+
+Generate the final report using ONLY the following sections:
+
+{sections}
+
+Requirements:
+
+- Use clean Markdown headings.
+- Keep each section under its correct heading.
+- Preserve bullet lists and nested structure from the tool outputs.
+- Preserve feature-by-feature risk analysis.
+- Preserve citations exactly where they appear.
+- If Document Insights are present, include them under "From Your Pitch Deck".
+- Finish with a concise Final Verdict summarizing the overall feasibility, key strengths, and highest-priority risks.
+- Do not invent information.
+- Do not summarize specialist outputs.
+- Only organize them into a polished report.
 """
+
+                    
                     response = client.chat.completions.create(
                         messages=[
                             {"role": "system", "content": SYSTEM_PROMPT},
@@ -667,9 +764,11 @@ Now generate the final Response in structured Format
                             tool_call_name = tool["function_name"]
                             function_response = completed_future.result(timeout=120)
 
-                            # Store the real result in workflow_state, truncated to
-                            # 2000 chars — this is what the final report is built from.
-                            workflow_state[f"stage_{stage}"][tool_call_name] = str(function_response)[:2000]
+                            # Store the COMPLETE tool output.
+                            # Do not truncate here. workflow_state is the source of truth
+                            # for the final report. Truncation should only happen when
+                            # passing context into downstream tools, never when storing results.
+                            workflow_state[f"stage_{stage}"][tool_call_name] = str(function_response)
 
                             # role=tool with matching tool_call_id — required by Groq
                             # message format. Content is intentionally just "completed":

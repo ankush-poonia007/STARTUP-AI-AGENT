@@ -62,8 +62,9 @@
 #  - rag.py → query_rag()
 # ============================================================
 
-import time
 import os
+import sys
+import time
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -81,18 +82,37 @@ from src.rag.rag import query_rag
 # load_dotenv() must run before os.getenv() to populate the environment.
 
 load_dotenv()
+# ======================================================================
+# TAVILY API KEY
+# ======================================================================
 
 TAVILY_API_KEY    = os.getenv("TAVILY_API_KEY")
-GEMINI_API_KEY_1  = os.getenv("GEMINI_API_KEY_1")
-GEMINI_API_KEY_2  = os.getenv("GEMINI_API_KEY_2")
-GEMINI_API_KEY_3  = os.getenv("GEMINI_API_KEY_3")
-GEMINI_API_KEY_4  = os.getenv("GEMINI_API_KEY_4")
-GEMINI_API_KEY_5  = os.getenv("GEMINI_API_KEY_5")
-GEMINI_API_KEY_6  = os.getenv("GEMINI_API_KEY_6")
-GEMINI_API_KEY_7  = os.getenv("GEMINI_API_KEY_7")
-GEMINI_API_KEY_8  = os.getenv("GEMINI_API_KEY_8")
-GEMINI_API_KEY_9  = os.getenv("GEMINI_API_KEY_9")
+
+
+# ======================================================================
+# GEMINI API KEYS
+# ======================================================================
+
+GEMINI_API_KEY_1 = os.getenv("GEMINI_API_KEY_1")
+GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2")
+GEMINI_API_KEY_3 = os.getenv("GEMINI_API_KEY_3")
+GEMINI_API_KEY_4 = os.getenv("GEMINI_API_KEY_4")
+GEMINI_API_KEY_5 = os.getenv("GEMINI_API_KEY_5")
+GEMINI_API_KEY_6 = os.getenv("GEMINI_API_KEY_6")
+GEMINI_API_KEY_7 = os.getenv("GEMINI_API_KEY_7")
+GEMINI_API_KEY_8 = os.getenv("GEMINI_API_KEY_8")
+GEMINI_API_KEY_9 = os.getenv("GEMINI_API_KEY_9")
 GEMINI_API_KEY_10 = os.getenv("GEMINI_API_KEY_10")
+GEMINI_API_KEY_11 = os.getenv("GEMINI_API_KEY_11")
+GEMINI_API_KEY_12 = os.getenv("GEMINI_API_KEY_12")
+GEMINI_API_KEY_13 = os.getenv("GEMINI_API_KEY_13")
+GEMINI_API_KEY_14 = os.getenv("GEMINI_API_KEY_14")
+GEMINI_API_KEY_15 = os.getenv("GEMINI_API_KEY_15")
+GEMINI_API_KEY_16 = os.getenv("GEMINI_API_KEY_16")
+GEMINI_API_KEY_17 = os.getenv("GEMINI_API_KEY_17")
+GEMINI_API_KEY_18 = os.getenv("GEMINI_API_KEY_18")
+GEMINI_API_KEY_19 = os.getenv("GEMINI_API_KEY_19")
+GEMINI_API_KEY_20 = os.getenv("GEMINI_API_KEY_20")
 
 # Explicit api_key passed to avoid ambiguity with GOOGLE_API_KEY env var.
 # Each tool gets its own dedicated client/key — see file header note above.
@@ -633,17 +653,104 @@ def risk_analysis(startup_idea: str, market_context: str = "", mvp_context: str 
     market_section = market_context if market_context else "No market data available."
     mvp_section    = mvp_context    if mvp_context    else "No MVP plan available."
 
-    full_prompt = f"""You are a startup risk management expert and venture analyst.
-Based on this startup idea: {startup_idea},
+    full_prompt = f"""You are a Principal Startup Risk Analyst specializing in SaaS products, product engineering, security, compliance, and early-stage startups.
 
-Market Analysis:
+Your role is NOT to redesign the product.
+
+The Proposed MVP has already been finalized.
+
+Your responsibility is to evaluate the risks of building and launching THAT specific MVP.
+
+Use BOTH the Market Analysis and the Proposed MVP throughout your analysis.
+
+----------------------------------------------------
+STARTUP IDEA
+----------------------------------------------------
+{startup_idea}
+
+----------------------------------------------------
+MARKET ANALYSIS
+----------------------------------------------------
 {market_section}
 
-MVP Plan:
+----------------------------------------------------
+PROPOSED MVP
+----------------------------------------------------
 {mvp_section}
 
-Conduct a rigorous risk analysis for launching this product. Focus on identifying fatal flaws
-and hidden bottlenecks, and provide clear, actionable mitigation strategies for a small team.
+----------------------------------------------------
+TASK
+----------------------------------------------------
+
+First, identify the major features described in the Proposed MVP.
+
+Then evaluate EACH major feature individually.
+
+For every feature determine whether it introduces:
+
+- Product risk
+- Technical risk
+- Operational risk
+- Security risk
+- Compliance risk
+- Scalability risk
+
+Only skip a feature if it introduces no meaningful risk.
+
+Do not merge unrelated features into a single risk.
+
+For every identified risk provide:
+
+• Affected Feature
+• Risk Description
+• Why this feature creates the risk
+• Potential Impact
+• Practical Mitigation
+
+After evaluating the MVP feature-by-feature, identify ONE overall business-level strategic risk that is supported by the Market Analysis.
+
+----------------------------------------------------
+RULES
+----------------------------------------------------
+
+- Treat the Proposed MVP as fixed.
+- Do not redesign the product.
+- Do not suggest additional MVP features.
+- Base every conclusion only on the supplied Market Analysis and Proposed MVP.
+- Every MVP risk MUST explicitly reference the feature that created it.
+- Prefer implementation, engineering, operational, compliance, security, and scalability risks over generic startup advice.
+- Keep recommendations practical for a small startup team.
+- Avoid repeating similar risks.
+
+----------------------------------------------------
+OUTPUT FORMAT
+----------------------------------------------------
+
+## MVP Risks
+
+### Feature: <Feature Name>
+
+Risk:
+Why:
+Impact:
+Mitigation:
+
+### Feature: <Feature Name>
+
+Risk:
+Why:
+Impact:
+Mitigation:
+
+(Repeat for each major feature that introduces a meaningful risk.)
+
+---
+
+## Highest Business Risk
+
+Risk:
+Reason:
+Mitigation:
 """
 
     for attempt in range(3):
@@ -681,7 +788,10 @@ and hidden bottlenecks, and provide clear, actionable mitigation strategies for 
 
         except Exception:
             return "Risk analysis unavailable — service error, no data retrieved."
-
+    print("=" * 80)
+    print("RAW RISK ANALYSIS OUTPUT")
+    print(response.text)
+    print("=" * 80)
     return response.text
 
 
@@ -759,3 +869,170 @@ def search_documents(user_input: str, file_name: str) -> str:
         formatted_response += f"[Page {page}, {fname}]: {text}\n\n"
 
     return formatted_response
+
+
+if __name__ == "__main__":
+
+    # ==========================================================
+    # AVAILABLE DOCUMENTS
+    # ==========================================================
+
+    FILES = {
+        "agi": "01_Artificial_General_Intelligence_Report.pdf",
+        "cyber": "02_Cybersecurity_Threat_Intelligence_Report.pdf",
+        "quantum": "03_Quantum_Computing_Research_Report.pdf",
+        "renewable": "04_Renewable_Energy_Transition_Report.pdf",
+        "climate": "05_Climate_Change_Mitigation_Report.pdf",
+
+        # BizRadar sample documents
+        "health": "HealthAssist_AI.pdf",
+        "legal": "LegalAid_AI.pdf",
+        "police": "PoliceConnect_AI.pdf",
+        "policy": "PolicyInsight_AI.pdf",
+        "techstack": "TechStack_Genius.pdf",
+        "civic": "CivicLaw_Pro.pdf",
+    }
+
+    # ==========================================================
+    # TEST CASES
+    # ==========================================================
+
+    TEST_CASES = {
+
+        # -------------------------
+        # AGI
+        # -------------------------
+
+        "agi_summary": (
+            "Summarize this report.",
+            FILES["agi"],
+        ),
+
+        "agi_market": (
+            "What is the market overview?",
+            FILES["agi"],
+        ),
+
+        "agi_future": (
+            "What future trends are discussed?",
+            FILES["agi"],
+        ),
+
+        # -------------------------
+        # Quantum
+        # -------------------------
+
+        "quantum_summary": (
+            "Summarize this report.",
+            FILES["quantum"],
+        ),
+
+        "quantum_market": (
+            "What is the market overview?",
+            FILES["quantum"],
+        ),
+
+        "quantum_hardware": (
+            "Who are the major hardware companies?",
+            FILES["quantum"],
+        ),
+
+        "quantum_risks": (
+            "What are the biggest challenges?",
+            FILES["quantum"],
+        ),
+
+        # -------------------------
+        # Cybersecurity
+        # -------------------------
+
+        "cyber_summary": (
+            "Summarize this report.",
+            FILES["cyber"],
+        ),
+
+        "cyber_zero_trust": (
+            "Explain Zero Trust Architecture.",
+            FILES["cyber"],
+        ),
+
+        # -------------------------
+        # Renewable
+        # -------------------------
+
+        "renewable_summary": (
+            "Summarize this report.",
+            FILES["renewable"],
+        ),
+
+        "renewable_market": (
+            "What is the market overview?",
+            FILES["renewable"],
+        ),
+
+        # -------------------------
+        # Climate
+        # -------------------------
+
+        "climate_summary": (
+            "Summarize this report.",
+            FILES["climate"],
+        ),
+
+        "climate_statistics": (
+            "List the important statistics.",
+            FILES["climate"],
+        ),
+
+        # -------------------------
+        # Negative Tests
+        # -------------------------
+
+        "negative_1": (
+            "Who won the FIFA World Cup 2022?",
+            FILES["quantum"],
+        ),
+
+        "negative_2": (
+            "What is the capital of Japan?",
+            FILES["quantum"],
+        ),
+    }
+
+    # ==========================================================
+    # SELECT TEST
+    # ==========================================================
+
+    TEST_NAME = "quantum_market"
+
+    query, file_name = TEST_CASES[TEST_NAME]
+
+    print("=" * 100)
+    print(f"TEST : {TEST_NAME}")
+    print("=" * 100)
+
+    print(f"\nFile : {file_name}")
+    print(f"Query: {query}\n")
+
+    import time
+
+    start = time.perf_counter()
+
+    result = search_documents(
+        user_input=query,
+        file_name=file_name,
+    )
+
+    elapsed = time.perf_counter() - start
+
+    print("-" * 100)
+    print("RESULT")
+    print("-" * 100)
+
+    print(result)
+
+    print(f"\nExecution Time: {elapsed:.2f} seconds")
+
+    print("\n" + "=" * 100)
+    print("END OF TEST")
+    print("=" * 100)

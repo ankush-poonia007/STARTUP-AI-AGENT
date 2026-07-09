@@ -1,0 +1,9 @@
+EMBEDDING_MODEL = "text-embedding-004"
+
+RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+
+DEFAULT_VECTOR_TOP_K = 10
+
+DEFAULT_RERANK_TOP_K = 3
+
+GENERATION_MODEL = "gemini-2.5-flash"

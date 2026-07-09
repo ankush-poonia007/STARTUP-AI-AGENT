@@ -1,176 +1,503 @@
-# ============================================================
-#  rag.py — Retrieval Augmented Generation Pipeline for BizRadar AI
-# ============================================================
-#
-#  What this file does:
-#  Implements the complete two-phase RAG pipeline for BizRadar AI, plus the
-#  Phase 4 document-relevance classification layer used to decide whether
-#  Stage 4 should be unlocked for a given turn at all.
-#
-#  Phase 1 — Ingestion (runs once per document):
-#      PDF → paragraph-aware fixed-token chunks → Gemini embeddings → ChromaDB
-#  Phase 2 — Retrieval (runs on every user query):
-#      User question → Gemini embedding → cosine similarity search,
-#      scoped by where={"file_name": ...} → top 3 chunks
-#  Phase 4 addition — Relevance Gating (runs once per conversation turn):
-#      User question → is ANY uploaded file relevant to this question? →
-#      real filenames returned only if yes, "" otherwise
-#
-#  What this file does NOT handle:
-#  Does not manage conversation history — that belongs to context_manager.py.
-#  Does not call the LLM for final answer generation — that belongs to
-#  orchestrator.py.
-#  Does not define the search_documents tool wrapper — that belongs to tools.py.
-#
-#  Functions:
-#  - ingest_pdf()                  → PDF file path → flat list of chunk dicts
-#  - embed_and_store()              → chunk list → vectors stored in ChromaDB
-#  - query_rag()                    → question + where filter → top 3 chunks + metadata
-#  - classify_document_relevance()  → Phase 4: Gemini true/false call deciding whether
-#                                      a question actually requires reading the
-#                                      uploaded documents at all
-#  - get_available_files()          → Phase 4: wraps classify_document_relevance() —
-#                                      returns real filenames only when relevant,
-#                                      "" otherwise. This is what orchestrator.py's
-#                                      run() actually calls each turn to decide
-#                                      whether Stage 4 exists for that turn.
-#
-#  Used by:
-#  - app.py          → calls ingest_pdf() + embed_and_store() at startup if user uploads a PDF
-#  - tools.py        → calls query_rag() inside search_documents() tool function
-#  - orchestrator.py → calls get_available_files(user_input) each turn to build
-#                      current_files before deciding whether to inject FILE_PROMPT
-#                      and whether Stage 4 is reachable that turn
-#
-#  Design Decisions:
-#  - PersistentClient: data survives between sessions — Client() would lose data on exit
-#  - gemini-embedding-001: stable production embedding model available on free tier API keys.
-#                          Same model used for both ingestion and querying — vector space consistency.
-#                          text-embedding-004 was unavailable on this API key version (404 NOT_FOUND).
-#  - MD5 hash as chunk ID: prevents duplicate ingestion even if the same PDF is renamed
-#  - Paragraph-aware fixed-token chunking (Phase 4): replaced pure \n\n splitting.
-#                          Small paragraphs kept whole; large paragraphs split via a
-#                          sliding window (CHUNK_SIZE=250, OVERLAP=50, STEP=200).
-#                          Pure \n\n splitting under-chunked dense PDFs — a 2-page report
-#                          previously produced only 2 chunks total. The sliding window
-#                          fix was verified via evaluator.py: 100% recall@3 maintained
-#                          post-migration, with properly granular chunks.
-#  - Metadata stored per chunk: enables page-level citations AND Phase 4's
-#                          where={"file_name": ...} filtering for multi-document isolation
-#  - n_results=3: reduced from 5 — prevents Stage 4 RAG results from bloating self.messages
-#                 context and crowding out Stage 2/3 reasoning room in the agent loop
-#  - heartbeat() check: verifies ChromaDB connection before attempting ingestion
-#  - Two separate Gemini clients (gemini_client_1, gemini_client_2): spreads
-#                          embedding calls and classifier calls across separate
-#                          API keys/quotas, same rationale as tools.py's per-tool
-#                          dedicated clients — see that file's header.
-#
-#  Phase 4 backlog note:
-#  classify_document_relevance()'s ~100-line prompt is currently hardcoded inline
-#  in this file, duplicating the pattern prompts.py already established for
-#  SYSTEM_PROMPT/FILE_PROMPT. Deliberately left as-is for now rather than
-#  refactored into prompts.py as a CLASSIFIER_PROMPT constant — flagged here so
-#  it isn't forgotten, not because it's correct long-term. Revisit if/when
-#  prompts.py is the established single source of truth for all LLM-facing
-#  prompt strings in this codebase.
-# ============================================================
 
-import os
 import hashlib
+import os
+import time
 
 import chromadb
 import pdfplumber
-from google import genai
+
 from dotenv import load_dotenv
+
+from google import genai
 from google.genai import types
 
+from src.config.settings import (
+    DEFAULT_VECTOR_TOP_K,
+    DEFAULT_RERANK_TOP_K,
+    GENERATION_MODEL,
+    EMBEDDING_MODEL
+)
 
-# ── ENVIRONMENT & CLIENT SETUP ────────────────────────────────
-# Runs once at module load — clients reused across all function calls.
-# load_dotenv() must run before os.getenv() to populate the environment.
+from src.rag.reranker import rerank
+
+
+# ============================================================
+# Environment
+# ============================================================
 
 load_dotenv()
-GEMINI_API_KEY_1  = os.getenv("GEMINI_API_KEY_1")
-GEMINI_API_KEY_2  = os.getenv("GEMINI_API_KEY_2")
-GEMINI_API_KEY_3  = os.getenv("GEMINI_API_KEY_3")
-GEMINI_API_KEY_4  = os.getenv("GEMINI_API_KEY_4")
-GEMINI_API_KEY_5  = os.getenv("GEMINI_API_KEY_5")
-GEMINI_API_KEY_6  = os.getenv("GEMINI_API_KEY_6")
-GEMINI_API_KEY_7  = os.getenv("GEMINI_API_KEY_7")
-GEMINI_API_KEY_8  = os.getenv("GEMINI_API_KEY_8")
-GEMINI_API_KEY_9  = os.getenv("GEMINI_API_KEY_9")
+
+# ============================================================
+# Gemini API Keys
+# ============================================================
+
+GEMINI_API_KEY_1 = os.getenv("GEMINI_API_KEY_1")
+GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2")
+GEMINI_API_KEY_3 = os.getenv("GEMINI_API_KEY_3")
+GEMINI_API_KEY_4 = os.getenv("GEMINI_API_KEY_4")
+GEMINI_API_KEY_5 = os.getenv("GEMINI_API_KEY_5")
+GEMINI_API_KEY_6 = os.getenv("GEMINI_API_KEY_6")
+GEMINI_API_KEY_7 = os.getenv("GEMINI_API_KEY_7")
+GEMINI_API_KEY_8 = os.getenv("GEMINI_API_KEY_8")
+GEMINI_API_KEY_9 = os.getenv("GEMINI_API_KEY_9")
 GEMINI_API_KEY_10 = os.getenv("GEMINI_API_KEY_10")
+GEMINI_API_KEY_11 = os.getenv("GEMINI_API_KEY_11")
+GEMINI_API_KEY_12 = os.getenv("GEMINI_API_KEY_12")
+GEMINI_API_KEY_13 = os.getenv("GEMINI_API_KEY_13")
+GEMINI_API_KEY_14 = os.getenv("GEMINI_API_KEY_14")
+GEMINI_API_KEY_15 = os.getenv("GEMINI_API_KEY_15")
+GEMINI_API_KEY_16 = os.getenv("GEMINI_API_KEY_16")
+GEMINI_API_KEY_17 = os.getenv("GEMINI_API_KEY_17")
+GEMINI_API_KEY_18 = os.getenv("GEMINI_API_KEY_18")
+GEMINI_API_KEY_19 = os.getenv("GEMINI_API_KEY_19")
+GEMINI_API_KEY_20 = os.getenv("GEMINI_API_KEY_20")
 
-# gemini_client_1 → embed_content() calls (embed_and_store, query_rag)
-# gemini_client_2 → generate_content() calls (classify_document_relevance)
-# Split across two keys for the same reason tools.py dedicates a separate
-# client per tool — spreads load across separate free-tier quotas.
-gemini_client_1 = genai.Client(api_key=GEMINI_API_KEY_7)
-gemini_client_2 = genai.Client(api_key=GEMINI_API_KEY_8)
+# ============================================================
+# Gemini API Pool
+# ============================================================
 
-# Embedding model used for both ingestion and retrieval.
-# Must stay identical across both phases — changing this after ingestion
-# requires deleting data/chroma_db/ and re-ingesting all documents.
-# gemini-embedding-001 chosen over text-embedding-004 — 404 on this API key version.
-EMBEDDING_MODEL = "gemini-embedding-001"
+GEMINI_API_KEYS = [
+    GEMINI_API_KEY_1,
+    GEMINI_API_KEY_2,
+    GEMINI_API_KEY_3,
+    GEMINI_API_KEY_4,
+    GEMINI_API_KEY_5,
+    GEMINI_API_KEY_6,
+    GEMINI_API_KEY_7,
+    GEMINI_API_KEY_8,
+    GEMINI_API_KEY_9,
+    GEMINI_API_KEY_10,
+    GEMINI_API_KEY_11,
+    GEMINI_API_KEY_12,
+    GEMINI_API_KEY_13,
+    GEMINI_API_KEY_14,
+    GEMINI_API_KEY_15,
+    GEMINI_API_KEY_16,
+    GEMINI_API_KEY_17,
+    GEMINI_API_KEY_18,
+    GEMINI_API_KEY_19,
+    GEMINI_API_KEY_20,
+]
 
-# PersistentClient writes to disk — data survives between sessions.
-# get_or_create_collection: safe to call on every restart, no crash if collection exists.
-client     = chromadb.PersistentClient(path="./data/chroma_db")
-collection = client.get_or_create_collection(name="data_storage")
+GEMINI_API_KEYS = [
+    key
+    for key in GEMINI_API_KEYS
+    if key
+]
+
+# ============================================================
+# Dynamic API Pool Configuration
+# ============================================================
+
+API_COOLDOWN_SECONDS  = 60
+
+_current_api_index = 0
+
+api_pool = [
+    {
+        "client": genai.Client(api_key=key),
+        "cooldown_until": 0.0,
+        "requests": 0,
+        "failures": 0,
+    }
+    for key in GEMINI_API_KEYS
+]
+
+# ============================================================
+# Dedicated Embedding Client
+# ============================================================
+
+gemini_client_1 = genai.Client(
+    api_key=GEMINI_API_KEY_1
+)
+
+# ============================================================
+# Models
+# ============================================================
+
+# EMBEDDING_MODEL = "gemini-embedding-001"
+
+# GENERATION_MODEL = "gemini-2.5-flash"
+
+# ============================================================
+# ChromaDB
+# ============================================================
+
+client = chromadb.PersistentClient(
+    path="./data/chroma_db"
+)
+
+collection = client.get_or_create_collection(
+    name="data_storage"
+)
+
+# ============================================================
+# Gemini API Manager
+# ============================================================
+
+def get_next_available_client() -> tuple[int, genai.Client]:
+    """
+    Return the next available Gemini client.
+
+    Strategy
+    --------
+    1. Start from the last successful API key.
+    2. Skip keys currently in cooldown.
+    3. Wrap around the pool if necessary.
+    4. Raise an error if every key is unavailable.
+    """
+
+    global _current_api_index
+
+    if not api_pool:
+        raise RuntimeError(
+            "No Gemini API keys have been configured."
+        )
+
+    current_time = time.time()
+    total_keys = len(api_pool)
+
+    for offset in range(total_keys):
+
+        index = (_current_api_index + offset) % total_keys
+
+        state = api_pool[index]
+
+        if current_time >= state["cooldown_until"]:
+            return index, state["client"]
+
+    raise RuntimeError(
+        "All Gemini API keys are currently in cooldown."
+    )
+    
+
+# ============================================================
+# API State Updates
+# ============================================================
+
+def mark_api_success(
+    api_index: int,
+) -> None:
+    """
+    Mark an API key as healthy after a successful request.
+
+    Responsibilities
+    ----------------
+    1. Reset failure count.
+    2. Remove cooldown.
+    3. Remember this key as the preferred key.
+    """
+
+    global _current_api_index
+
+    state = api_pool[api_index]
+
+    # Reset failure tracking
+    state["failures"] = 0
+
+    # Clear cooldown immediately
+    state["cooldown_until"] = 0.0
+
+    # Continue future requests from this key
+    _current_api_index = api_index
+    
+
+def mark_api_failed(
+    api_index: int,
+) -> None:
+    """
+    Mark an API key as temporarily unavailable.
+
+    Strategy
+    --------
+    1. Increase failure count.
+    2. Apply exponential cooldown.
+    3. Advance to the next API key.
+    """
+
+    global _current_api_index
+
+    state = api_pool[api_index]
+
+    # Track consecutive failures
+    state["failures"] += 1
+
+    # Exponential backoff
+    cooldown = min(
+        300,  # Maximum cooldown (5 minutes)
+        API_COOLDOWN_SECONDS
+        * (2 ** (state["failures"] - 1))
+    )
+
+    state["cooldown_until"] = (
+        time.time() + cooldown
+    )
+
+    # Move immediately to the next API key
+    _current_api_index = (
+        api_index + 1
+    ) % len(api_pool)
+
+    print(
+        f"[Gemini] API Key {api_index + 1} "
+        f"cooling down for {cooldown:.0f}s"
+    )
 
 
+# ============================================================
+# API Pool Statistics
+# ============================================================
+
+def print_api_pool_status() -> None:
+    """
+    Print the runtime status of the Gemini API pool.
+
+    Displays:
+    - Current active API key
+    - Total attempts
+    - Consecutive failures
+    - Remaining cooldown
+    """
+
+    if not api_pool:
+
+        print("\nNo Gemini API keys configured.\n")
+
+        return
+
+    current_time = time.time()
+
+    print()
+    print("=" * 90)
+    print("GEMINI API POOL STATUS")
+    print("=" * 90)
+
+    for index, state in enumerate(api_pool):
+
+        remaining = max(
+            0.0,
+            state["cooldown_until"] - current_time,
+        )
+
+        status = (
+            "ACTIVE"
+            if remaining == 0
+            else "COOLDOWN"
+        )
+
+        current_marker = (
+            "  ← Current"
+            if index == _current_api_index
+            else ""
+        )
+
+        print(
+            f"Key {index + 1:<2}"
+            f"| Status: {status:<8}"
+            f"| Attempts: {state['requests']:<5}"
+            f"| Failures: {state['failures']:<3}"
+            f"| Cooldown: {remaining:>6.1f}s"
+            f"{current_marker}"
+        )
+
+    print("=" * 90)
+    print()
+    
+    
+# ============================================================
+# Gemini Generation
+# ============================================================
+
+def gemini_generate_with_failover(
+    prompt: str,
+    *,
+    model: str = GENERATION_MODEL,
+    temperature: float = 0.0,
+    max_retries: int = 2,
+) -> str:
+    """
+    Generate text using Gemini with automatic API
+    failover and intelligent retry logic.
+
+    Features
+    --------
+    • Dynamic API rotation
+    • Exponential cooldown
+    • Automatic retry
+    • Last successful API optimization
+    • Runtime statistics
+    """
+
+    last_exception = None
+
+    retries = 0
+
+    while retries <= max_retries:
+
+        attempted_keys = set()
+
+        while len(attempted_keys) < len(api_pool):
+
+            api_index, client = get_next_available_client()
+
+            if api_index in attempted_keys:
+                break
+
+            attempted_keys.add(api_index)
+
+            state = api_pool[api_index]
+
+            # Count every request attempt
+            state["requests"] += 1
+
+            try:
+
+                print(
+                    f"[Gemini] "
+                    f"Using API Key {api_index + 1}"
+                )
+
+                response = client.models.generate_content(
+
+                    model=model,
+
+                    contents=prompt,
+
+                    config=types.GenerateContentConfig(
+
+                        temperature=temperature,
+
+                    ),
+
+                )
+                if not getattr(response, "text", None):
+                    raise RuntimeError(
+                        "Gemini returned an empty response."
+                    )
+                mark_api_success(api_index)
+
+                return response.text
+
+            except Exception as error:
+
+                last_exception = error
+
+                error_message = str(error).lower()
+
+                # ----------------------------
+                # Rate Limit / Quota Handling
+                # ----------------------------
+
+                if any(
+
+                    keyword in error_message
+
+                    for keyword in (
+
+                        "429",
+                        "quota",
+                        "resource_exhausted",
+                        "rate limit",
+
+                    )
+
+                ):
+
+                    print(
+
+                        f"[Gemini] "
+
+                        f"API Key {api_index + 1} "
+
+                        "rate limited."
+
+                    )
+
+                    mark_api_failed(api_index)
+
+                    continue
+
+                # ----------------------------
+                # Temporary Server Errors
+                # ----------------------------
+
+                if any(
+
+                    keyword in error_message
+
+                    for keyword in (
+
+                        "500",
+                        "502",
+                        "503",
+                        "504",
+
+                    )
+
+                ):
+
+                    print(
+
+                        "[Gemini] "
+
+                        "Temporary server error."
+
+                    )
+
+                    time.sleep(2)
+
+                    continue
+
+                # ----------------------------
+                # Unknown Errors
+                # ----------------------------
+
+                raise
+
+        retries += 1
+
+        if retries <= max_retries:
+
+            print(
+
+                f"[Gemini] "
+
+                f"Retry Attempt "
+
+                f"{retries}/{max_retries}"
+
+            )
+
+            time.sleep(2)
+
+    raise RuntimeError(
+
+        f"Gemini generation failed after "
+
+        f"{max_retries + 1} attempts."
+
+    ) from last_exception
+    
+    
 # ── PHASE 1a — PDF INGESTION ──────────────────────────────────
 
 def ingest_pdf(file_path: str) -> list:
-    """Extract and chunk text from a PDF file for RAG ingestion.
-
-    Opens the PDF page by page, extracts plain text, splits into
-    paragraph-level units, then applies fixed-token sliding-window chunking
-    to any paragraph too large to keep whole. Returns a flat list of chunk
-    dicts with page/file metadata.
-
-    Parameters:
-        file_path (str) → absolute or relative path to the PDF file
-
-    Returns:
-        list → flat list of dicts, each with keys:
-               - "text"        (str)  → chunk content
-               - "page_number" (int)  → 1-indexed page the chunk came from
-               - "file_name"   (str)  → basename of the source file (no directory path)
-               - "chunk_index" (int)  → 0-indexed position of this chunk within its page
-               Returns [] if the PDF has no extractable text on any page
-               (e.g. a fully image-based/scanned PDF with no OCR layer).
-
-    Why paragraph-first, then fixed-token sliding window (Phase 4 improvement):
-        Pure \\n\\n paragraph splitting alone under-chunked dense PDFs — a
-        2-page report could produce only 2 total chunks if each page's text
-        happened to contain few paragraph breaks, losing retrieval granularity.
-        Small paragraphs (≤ CHUNK_SIZE words) are kept whole, since each
-        typically contains one complete idea — a meaningful retrieval unit.
-        Large paragraphs are split via a sliding window so no single chunk
-        becomes too large to embed meaningfully, while OVERLAP preserves
-        context across the cut point so an idea spanning a chunk boundary
-        isn't lost entirely from either chunk.
-
-    Why pdfplumber over PyPDF2:
-        pdfplumber handles complex PDF layouts (tables, columns, multi-font
-        pitch decks) more reliably than PyPDF2, which can scramble reading
-        order on non-linear layouts.
-
-    Why the max() length-check guards against an empty chunks list:
-        An all-image or otherwise non-extractable PDF produces zero chunks.
-        Calling max() on an empty generator raises ValueError — this would
-        crash ingestion entirely instead of returning a clear empty result
-        the caller (embed_and_store, or app.py) can handle gracefully.
-    """
+    
 
     file_name = os.path.basename(file_path)  # strip directory path — store filename only
 
-    CHUNK_SIZE = 250
-    OVERLAP    = 50
-    STEP       = CHUNK_SIZE - OVERLAP
+    # ============================================================
+    # Chunking Configuration
+    # ============================================================
 
+    CHUNK_SIZE = 250
+
+    OVERLAP = 50
+
+    STEP = CHUNK_SIZE - OVERLAP
+
+    MIN_CHUNK_WORDS = 20
+    
     chunks = []
 
     with pdfplumber.open(file_path) as pdf:
@@ -219,6 +546,10 @@ def ingest_pdf(file_path: str) -> list:
                     while left < len(words):
 
                         window_text = " ".join(words[left:right])
+
+                        # Skip tiny trailing chunks
+                        if len(window_text.split()) < MIN_CHUNK_WORDS:
+                            break
 
                         chunks.append({
                             "text": window_text,
@@ -386,13 +717,6 @@ def query_rag(user_input: str, where: dict) -> list:
         response.embeddings returns a list of ContentEmbedding objects, not raw floats.
         .values extracts the float list. Wrapped in [] for single-query format ChromaDB expects.
 
-    Why n_results=3 (reduced from 5):
-        search_documents() is called as Stage 4, after Stages 1-3 have already populated
-        self.messages with substantial context. Top-5 chunks bloated the message history
-        and crowded out the LLM's reasoning room for final answer generation.
-        Top-3 preserves enough context for citation and answer quality.
-        Verified via evaluator.py: 100% recall@3 across 25 ground-truth questions
-        spanning 5 documents — top-3 is sufficient at the current chunking granularity.
 
     Why zip(documents, metadatas):
         ChromaDB returns documents and metadatas as separate parallel lists under [0].
@@ -405,26 +729,130 @@ def query_rag(user_input: str, where: dict) -> list:
         contents=[user_input]
     )
 
-    # ChromaDB cosine similarity search — returns nested lists, [0] for single query.
-    # response.embeddings[0].values extracts raw float list from ContentEmbedding object.
-    # Wrapped in [] — ChromaDB expects list of embeddings, one per query.
-    # where filter scopes the search to one document — the Phase 4 isolation mechanism.
+
     results = collection.query(
         query_embeddings=[response.embeddings[0].values],
         where=where,
-        n_results=3
+        n_results=DEFAULT_VECTOR_TOP_K,
+        include=[
+            "documents",
+            "metadatas",
+            "distances",
+        ],
     )
 
-    print(results["metadatas"][0])
+    # print(results["metadatas"][0])
+    if not results["documents"][0]:
+        return []
+    # ============================================================
+    # Build candidate chunk list
+    # ============================================================
 
-    # Pair each chunk text with its metadata — enables page-level source citations
-    return [
-        {"text": text, "metadata": metadata}
-        for text, metadata in zip(results["documents"][0], results["metadatas"][0])
+    retrieved_chunks = [
+        {
+            "text": text,
+            "metadata": metadata,
+            "distance": distance,
+        }
+        for text, metadata, distance in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
+        )
     ]
+
+    # ============================================================
+    # CrossEncoder Reranking
+    # ============================================================
+
+    reranked_chunks = rerank(
+        query=user_input,
+        retrieved_chunks=retrieved_chunks,
+        top_k=DEFAULT_RERANK_TOP_K,
+    )
+
+    return reranked_chunks
 
 
 # ── PHASE 4 — DOCUMENT RELEVANCE GATING ───────────────────────
+
+# ============================================================
+# Generic Gemini Response Generator
+# ============================================================
+
+def generate_gemini_response(
+    prompt: str,
+    *,
+    model: str = GENERATION_MODEL,
+    temperature: float = 0.0,
+    normalize: bool = False,
+) -> str:
+    """
+    Generate a Gemini response using the
+    dynamic API manager.
+
+    Parameters
+    ----------
+    prompt
+        Prompt sent to Gemini.
+
+    model
+        Gemini model.
+
+    temperature
+        Generation temperature.
+
+    normalize
+        Normalizes the response for
+        classifier-style outputs.
+    """
+
+    response = gemini_generate_with_failover(
+
+        prompt=prompt,
+
+        model=model,
+
+        temperature=temperature,
+
+    )
+
+    if normalize:
+
+        response = (
+            response
+            .strip()
+            .lower()
+            .replace(".", "")
+        )
+
+    return response
+
+
+# ============================================================
+# Classifier Response Generator
+# ============================================================
+
+def generate_classifier_response(
+    prompt: str,
+) -> str:
+    """
+    Specialized wrapper used by the
+    document-routing classifier.
+    """
+
+    return generate_gemini_response(
+
+        prompt=prompt,
+
+        model=GENERATION_MODEL,
+
+        temperature=0.0,
+
+        normalize=True,
+
+    )
+
 
 def classify_document_relevance(user_input: str, filenames: str) -> bool:
     """Asks Gemini whether answering the user's question actually requires
@@ -501,11 +929,21 @@ Uploaded Documents:
 {filenames}
 
 ---
+Return TRUE only if answering the user's request requires reading information from one or more uploaded documents.
+
+Return FALSE if the request can be answered using general knowledge, reasoning, or by generating new content without consulting the uploaded documents.
+
+If uploaded documents are available (indicated by a non-empty filenames list) AND the user's query refers to a specific section or structural part of a document (for example: introduction, methodology, findings, conclusion, executive summary), infer that the user is referring to the uploaded documents and return TRUE.
+
+Do not classify a query as TRUE simply because uploaded filenames exist.
+
+Uploaded filenames only provide evidence that documents are available. The query itself must indicate that the user is asking about the contents of those documents, either explicitly (e.g., "uploaded report", "attached PDF", "pitch deck") or implicitly through document-structural language (e.g., "methodology section", "conclusion", "findings", "executive summary").
 
 Return TRUE only if the user is explicitly asking to:
 
 * summarize an uploaded document
 * analyze the contents of an uploaded document
+
 * extract information from an uploaded document
 * answer questions about information contained in an uploaded document
 * quote, cite, or reference an uploaded document
@@ -521,6 +959,13 @@ Examples that should return TRUE:
 "Compare the two uploaded files"
 "What are the key findings in the report?"
 "Analyze the contents of the uploaded document"
+"Summarize the uploaded pitch deck"
+"Extract the valuation from the uploaded term sheet"
+"Compare the uploaded investor decks"
+"What does the uploaded financial model predict?"
+"Extract action items from the uploaded PRD"
+"What does the methodology section describe?"
+"Compare the introduction and conclusion."
 
 ---
 
@@ -555,6 +1000,14 @@ Examples that should return FALSE:
 "Explain machine learning"
 "Write a business plan"
 "Generate feature ideas"
+"Create a pitch deck"
+"Write a business plan"
+"Draft a term sheet"
+"Create an investor deck"
+"Build a financial model"
+"What is a methodology?"
+"What is a pitch deck?"
+"What is a financial model?"
 
 Even if a pitch deck, report, notes, or other related documents are uploaded, these examples remain FALSE because the request does not require retrieving information from those documents.
 
@@ -574,32 +1027,115 @@ If NO → return TRUE
 
 Output Requirements:
 
-Return exactly one word:
+Return ONLY:
 
 true
 
-or
+OR
 
 false
 
-Do not provide explanations.
-Do not provide reasoning.
-Do not provide additional text.
+No punctuation.
+No markdown.
+No explanations.
 """
+        # ========================================================
+    # Execute Document Classifier
+    # ========================================================
 
-    response = gemini_client_2.models.generate_content(
-        contents=prompt,
-        model="gemini-2.5-flash",
-        config=types.GenerateContentConfig(
-            temperature=0.0
+    start_time = time.perf_counter()
+
+    try:
+
+        response_text = generate_classifier_response(
+            prompt=prompt,
         )
-    )
 
-    response_text = response.text.strip().lower().replace(".", "")
+        prediction = (
+            response_text == "true"
+        )
 
-    print(f"[DOC CLASSIFIER] Response: {response_text.capitalize()}")
+        latency = (
+            time.perf_counter()
+            - start_time
+        )
 
-    return response_text == "true"
+        print()
+
+        print("=" * 70)
+        print("DOCUMENT CLASSIFIER")
+        print("=" * 70)
+
+        print(
+            f"Query      : {user_input}"
+        )
+
+        print(
+            f"Prediction : {response_text.upper()}"
+        )
+
+        print(
+            f"Requires RAG : {prediction}"
+        )
+
+        print(
+            f"Latency    : {latency:.3f}s"
+        )
+
+        print("=" * 70)
+        print()
+
+        return prediction
+
+    except RuntimeError as error:
+
+        latency = (
+            time.perf_counter()
+            - start_time
+        )
+
+        print()
+
+        print("=" * 70)
+        print("DOCUMENT CLASSIFIER ERROR")
+        print("=" * 70)
+
+        print(error)
+
+        print(
+            f"Latency : {latency:.3f}s"
+        )
+
+        print("=" * 70)
+        print()
+
+        raise
+
+    except Exception as error:
+
+        latency = (
+            time.perf_counter()
+            - start_time
+        )
+
+        print()
+
+        print("=" * 70)
+        print("DOCUMENT CLASSIFIER ERROR")
+        print("=" * 70)
+
+        print(type(error).__name__)
+
+        print(error)
+
+        print(
+            f"Latency : {latency:.3f}s"
+        )
+
+        print("=" * 70)
+        print()
+
+        raise
 
 
 def get_available_files(user_input: str) -> str:
@@ -642,8 +1178,23 @@ def get_available_files(user_input: str) -> str:
 
     result = collection.get(include=["metadatas"])
 
-    unique_filenames = list(
-        set(metadata["file_name"] for metadata in result["metadatas"])
+    # ============================================================
+    # Extract Unique Filenames
+    # ============================================================
+
+    unique_filenames = sorted(
+
+        {
+
+            metadata["file_name"]
+
+            for metadata in result["metadatas"]
+
+            if metadata
+            and metadata.get("file_name")
+
+        }
+
     )
 
     # Early exit: no files in collection — nothing to classify against
@@ -653,6 +1204,21 @@ def get_available_files(user_input: str) -> str:
     # Build filename list for Gemini classification
     file_list = " ".join(unique_filenames)
 
+    print()
+
+    print("=" * 70)
+    print("AVAILABLE DOCUMENTS")
+    print("=" * 70)
+
+    print(f"Total Files : {len(unique_filenames)}")
+
+    for filename in unique_filenames:
+
+        print(f"• {filename}")
+
+    print("=" * 70)
+    print()
+    
     # Ask Gemini: does THIS question actually require reading these documents?
     is_doc_query = classify_document_relevance(
         user_input=user_input,
@@ -660,7 +1226,7 @@ def get_available_files(user_input: str) -> str:
     )
 
     if is_doc_query:
-        return file_list
+        return "\n".join(unique_filenames)
 
     return ""
 
