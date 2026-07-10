@@ -8,6 +8,13 @@ from src.evaluation.ground_truth import (
     QUANTUM_DATASET,
     RENEWABLE_ENERGY_DATASET,
     CLIMATE_CHANGE_DATASET,
+    HS_ALL_QUESTIONS,
+    HS_AGI_DATASET,
+    HS_RENEWABLE_ENERGY_DATASET,
+    HS_CLIMATE_CHANGE_DATASET,
+    HS_QUANTUM_DATASET,
+    HS_CYBERSECURITY_DATASET,
+    
 )
 
 
@@ -229,5 +236,25 @@ if __name__ == "__main__":
     print(f"{'=' * 60}")
 
     evaluate(ALL_QUESTIONS, "All Documents")
+    
+    print(f"\n{'=' * 60}")
+    print("FULL CORPUS EVALUATION")
+    print(f"{'=' * 60}")
+    
+    evaluate(HS_AGI_DATASET, "HS   AGI")
+    evaluate(HS_CYBERSECURITY_DATASET, "HS Cybersecurity")
+    evaluate(HS_QUANTUM_DATASET, "HS   Quantum Computing")
+    evaluate(HS_RENEWABLE_ENERGY_DATASET, "HS Renewable Energy")
+    evaluate(HS_CLIMATE_CHANGE_DATASET, "HS   Climate Change")
+
+    
+    print(f"\n{'=' * 60}")
+    print("FULL CORPUS EVALUATION")
+    print(f"{'=' * 60}")
+
+    evaluate(HS_ALL_QUESTIONS, "HS All Documents")
 
 
+    print(f"\n{'=' * 60}")
+    print("FULL CORPUS EVALUATION")
+    print(f"{'=' * 60}")

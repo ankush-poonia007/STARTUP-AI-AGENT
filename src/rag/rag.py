@@ -1,3 +1,5 @@
+# BM25 Library 
+import bm25s
 
 import hashlib
 import os
@@ -132,8 +134,16 @@ collection = client.get_or_create_collection(
 )
 
 # ============================================================
+# Hybird Search Varibales
+# ============================================================
+
+bm25_corpus ={}
+bm25_index  = None
+
+# ============================================================
 # Gemini API Manager
 # ============================================================
+
 
 def get_next_available_client() -> tuple[int, genai.Client]:
     """
@@ -631,6 +641,8 @@ def embed_and_store(new_chunks: list) -> str:
     except Exception as e:
         return f"Connection to the database failed: {e}"
 
+    
+    
     # Extract all texts in one pass — passed as batch to Gemini embed_content()
     texts = [item["text"] for item in new_chunks]
 
@@ -670,6 +682,10 @@ def embed_and_store(new_chunks: list) -> str:
             documents=documents,
             metadatas=metadatas
         )
+        
+        # BM25 Search call
+        build_bm25_index(new_chunks)
+        
         return "Data ingestion complete. Document saved successfully."
 
     except chromadb.errors.DuplicateIDError:
@@ -679,49 +695,53 @@ def embed_and_store(new_chunks: list) -> str:
 
 
 # ── PHASE 2 — RETRIEVAL ───────────────────────────────────────
+# ============================================================
+# BM25 search functions 
+# ============================================================
 
-def query_rag(user_input: str, where: dict) -> list:
-    """Convert a user question to a vector and retrieve the top 3 relevant chunks
-    from one specific document.
+def build_bm25_index(new_chunks):
+    
+    if not new_chunks:
+        return
+    # Using Globale defined variables
+    global bm25_corpus, bm25_index 
+    
+    for chunk in new_chunks:
+        bm25_corpus[chunk['text']] = chunk
+    
+    
+    corpus = [
+        chunk['text'] for chunk in bm25_corpus.values()
+    ]
+    
+    corpus_tokens = bm25s.tokenize(corpus, stopwords="english")
+    
+    bm25_index = bm25s.BM25(corpus=corpus)
+    
+    bm25_index.index(corpus_tokens)
+    
 
-    Embeds the user question using the same model used during ingestion (vector
-    space consistency), queries ChromaDB via cosine similarity scoped by the
-    where filter, and returns matched chunks with their source metadata for
-    citation.
-
-    Parameters:
-        user_input (str)  → raw user question or search query
-        where      (dict) → Phase 4 addition. ChromaDB metadata filter, e.g.
-                            {"file_name": "LegalAid_AI.pdf"} — restricts the
-                            similarity search to chunks from one specific
-                            uploaded document, even when multiple documents
-                            share the same collection. This is the actual
-                            mechanism that makes multi-document isolation work:
-                            without it, a query could return chunks from ANY
-                            uploaded PDF regardless of which one the user
-                            actually meant.
-
-    Returns:
-        list → list of dicts, each with keys:
-               - "text"     (str)  → matched chunk content
-               - "metadata" (dict) → {"page_number": int, "file_name": str}
-
-    Why same embedding model as embed_and_store():
-        Vector space consistency — different models produce different dimensional spaces.
-        Comparing vectors from different models produces meaningless similarity scores.
-        Both phases use EMBEDDING_MODEL constant — single source of truth.
-        Changing the model requires deleting data/chroma_db/ and re-ingesting.
-
-    Why [response.embeddings[0].values]:
-        ChromaDB expects query_embeddings as a list of float lists — one per query.
-        response.embeddings returns a list of ContentEmbedding objects, not raw floats.
-        .values extracts the float list. Wrapped in [] for single-query format ChromaDB expects.
+def bm25_retrieve(user_query, top_k = DEFAULT_VECTOR_TOP_K  ):
+    
+    if not bm25_index :
+        return []
+    
+    query_tokens = bm25s.tokenize(user_query)
+    
+    result, score = bm25_index.retrieve(query_tokens,k=top_k)
+    
+    res = {}
+    for k in range(top_k):
+        chunk = bm25_corpus[result[0][k]]
+        
+        chunk['score'] = score[0][k]
+        
+        res[chunk['text']] = chunk
+        
+    return res
 
 
-    Why zip(documents, metadatas):
-        ChromaDB returns documents and metadatas as separate parallel lists under [0].
-        zip() pairs each chunk with its metadata — enables source citations in agent responses.
-    """
+def vector_retrieve( user_input: str, where: dict ) -> list:
 
     # Embed user question — must use same model as ingestion for valid cosine comparison
     response = gemini_client_1.models.embed_content(
@@ -761,13 +781,77 @@ def query_rag(user_input: str, where: dict) -> list:
         )
     ]
 
+    return retrieved_chunks
+
+def query_rag(user_input: str, where: dict) -> list:
+    
+    vector_retrieved_chunks=vector_retrieve(user_input=user_input, where=where)
+
+    bm25_retrieved_chunks = bm25_retrieve(user_input)
+    
+    if not vector_retrieved_chunks and not bm25_retrieved_chunks :
+        return {"result":f"No match found for the query '{user_input}'"}
+    
+    filered_bm25_retrieved_chunks = {}
+    
+    min_score , max_score = float('inf'),float('-inf')
+    for text,chunk in bm25_retrieved_chunks.items():
+        if chunk['file_name'] != where['file_name']:
+            continue
+        filered_bm25_retrieved_chunks[text] = chunk
+        
+        if chunk['score'] > max_score:
+            max_score = chunk['score']
+        
+        if chunk['score'] < min_score:
+            min_score = chunk['score']
+            
+    # Adding vector_sim to each vector 
+    for chunk in vector_retrieved_chunks:
+        chunk['vector_sim'] = 1 - chunk['distance']
+    
+    if min_score != max_score:
+        normalized = 0
+        for text,chunk in filered_bm25_retrieved_chunks.items():
+            normalized = ( chunk['score'] - min_score ) / ( max_score - min_score )
+            chunk['normalized'] = normalized
+            chunk['distance'] = 1 - chunk['normalized'] 
+        
+    else:
+        normalized = 1
+        for text,chunk in filered_bm25_retrieved_chunks.items():
+            chunk['normalized'] = normalized
+            chunk['distance'] = 1 - chunk['normalized']
+            
+            
+    alpha = 0.5
+    unified_chunks = {}
+    
+    for chunk in vector_retrieved_chunks:
+        
+        
+        if chunk['text'] in filered_bm25_retrieved_chunks:
+            chunk['fusion_score'] = ( alpha * chunk['vector_sim'] ) + ((1-alpha) * chunk['normalized'])
+        
+        else:
+            chunk['fusion_score'] = (alpha * chunk['vector_sim']) + ((1-alpha) * 0)
+        
+        unified_chunks[chunk['text']] = chunk
+        
+            
+    for text, chunk in filered_bm25_retrieved_chunks.items():
+        
+        if text in unified_chunks:
+            continue
+        chunk['fusion_score'] = (alpha * 0) + ((1-alpha) * chunk['normalized'])
+        unified_chunks[text] = chunk 
     # ============================================================
     # CrossEncoder Reranking
     # ============================================================
-
+        
     reranked_chunks = rerank(
         query=user_input,
-        retrieved_chunks=retrieved_chunks,
+        retrieved_chunks=[chunk for text,chunk in unified_chunks.items()],
         top_k=DEFAULT_RERANK_TOP_K,
     )
 
@@ -1229,7 +1313,6 @@ def get_available_files(user_input: str) -> str:
         return "\n".join(unique_filenames)
 
     return ""
-
 
 # ── MANUAL BATCH RE-INGESTION (developer use only) ─────────────
 # Guarded behind __main__ — importing rag.py anywhere else (the app, tools.py,

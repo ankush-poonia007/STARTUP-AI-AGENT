@@ -343,7 +343,7 @@ CLIMATE_CHANGE_DATASET = [
     }
 ]
 
-HS_CLIMATE_MITIGATION_DATASET = [
+HS_CLIMATE_CHANGE_DATASET = [
     {
         "id": "HS-CM-001",
         "question": "Find the section introducing the Implementation Decade.",
@@ -390,7 +390,7 @@ ALL_QUESTIONS = (
 HS_ALL_QUESTIONS = (
     HS_AGI_DATASET
     + HS_CYBERSECURITY_DATASET
-    + HS_CLIMATE_MITIGATION_DATASET
+    + HS_CLIMATE_CHANGE_DATASET
     + HS_QUANTUM_DATASET
     + HS_RENEWABLE_ENERGY_DATASET
 )
