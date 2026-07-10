@@ -81,6 +81,40 @@ AGI_DATASET = [
     }
 ]
 
+HS_AGI_DATASET = [
+    {
+        "id": "HS-AGI-001",
+        "question": "Find the section that defines Neuro-Symbolic AI.",
+        "correct_page": 2,
+        "correct_file": "01_Artificial_General_Intelligence_Report.pdf"
+    },
+    {
+        "id": "HS-AGI-002",
+        "question": "Locate the page where World Models are introduced.",
+        "correct_page": 2,
+        "correct_file": "01_Artificial_General_Intelligence_Report.pdf"
+    },
+    {
+        "id": "HS-AGI-003",
+        "question": "Find the paragraph mentioning ARC-AGI.",
+        "correct_page": 2,
+        "correct_file": "01_Artificial_General_Intelligence_Report.pdf"
+    },
+    {
+        "id": "HS-AGI-004",
+        "question": "Find the section defining Embodied Cognition.",
+        "correct_page": 2,
+        "correct_file": "01_Artificial_General_Intelligence_Report.pdf"
+    },
+    {
+        "id": "HS-AGI-005",
+        "question": "Find the section defining Scaling Hypothesis.",
+        "correct_page": 1,
+        "correct_file": "01_Artificial_General_Intelligence_Report.pdf"
+    }
+]
+
+
 # =========================
 # CYBERSECURITY REPORT
 # =========================
@@ -111,6 +145,41 @@ CYBERSECURITY_DATASET = [
         "correct_file": "02_Cybersecurity_Threat_Intelligence_Report.pdf"
     }
 ]
+
+HS_CYBERSECURITY_DATASET = [
+    {
+        "id": "HS-CY-001",
+        "question": "Find the definition of Autonomous Reconnaissance.",
+        "correct_page": 2,
+        "correct_file": "02_Cybersecurity_Threat_Intelligence_Report.pdf"
+    },
+    {
+        "id": "HS-CY-002",
+        "question": "Locate the section introducing AI-Native MDR.",
+        "correct_page": 3,
+        "correct_file": "02_Cybersecurity_Threat_Intelligence_Report.pdf"
+    },
+    {
+        "id": "HS-CY-003",
+        "question": "Find the page explaining Zero-Trust Identity.",
+        "correct_page": 2,
+        "correct_file": "02_Cybersecurity_Threat_Intelligence_Report.pdf"
+    },
+    {
+        "id": "HS-CY-004",
+        "question": "Find the section defining Adversarial AI.",
+        "correct_page": 2,
+        "correct_file": "02_Cybersecurity_Threat_Intelligence_Report.pdf"
+    },
+    {
+        "id": "HS-CY-005",
+        "question": "Find the section defining Defense-Latency.",
+        "correct_page": 1,
+        "correct_file": "02_Cybersecurity_Threat_Intelligence_Report.pdf"
+    }
+]
+
+
 
 # =========================
 # QUANTUM COMPUTING REPORT
@@ -143,6 +212,41 @@ QUANTUM_DATASET = [
     }
 ]
 
+HS_QUANTUM_DATASET = [
+    {
+        "id": "HS-QC-001",
+        "question": "Find the section explaining Harvest Now, Decrypt Later.",
+        "correct_page": 4,
+        "correct_file": "03_Quantum_Computing_Research_Report.pdf"
+    },
+    {
+        "id": "HS-QC-002",
+        "question": "Locate the page introducing Logical Qubits.",
+        "correct_page": 2,
+        "correct_file": "03_Quantum_Computing_Research_Report.pdf"
+    },
+    {
+        "id": "HS-QC-003",
+        "question": "Find the section defining Hybrid Workflows.",
+        "correct_page": 2,
+        "correct_file": "03_Quantum_Computing_Research_Report.pdf"
+    },
+    {
+        "id": "HS-QC-004",
+        "question": "Find the comparison involving Superconducting quantum hardware.",
+        "correct_page": 3,
+        "correct_file": "03_Quantum_Computing_Research_Report.pdf"
+    },
+    {
+        "id": "HS-QC-005",
+        "question": "Find the comparison involving Trapped-Ion quantum hardware.",
+        "correct_page": 3,
+        "correct_file": "03_Quantum_Computing_Research_Report.pdf"
+    }
+]
+
+
+
 # =========================
 # RENEWABLE ENERGY REPORT
 # =========================
@@ -173,6 +277,40 @@ RENEWABLE_ENERGY_DATASET = [
         "correct_file": "04_Renewable_Energy_Transition_Report.pdf"
     }
 ]
+
+HS_RENEWABLE_ENERGY_DATASET = [
+    {
+        "id": "HS-RE-001",
+        "question": "Find the section defining Energy Storage (BESS).",
+        "correct_page": 2,
+        "correct_file": "04_Renewable_Energy_Transition_Report.pdf"
+    },
+    {
+        "id": "HS-RE-002",
+        "question": "Locate the page discussing Green Hydrogen.",
+        "correct_page": 2,
+        "correct_file": "04_Renewable_Energy_Transition_Report.pdf"
+    },
+    {
+        "id": "HS-RE-003",
+        "question": "Find the comparison entry for Solar PV.",
+        "correct_page": 3,
+        "correct_file": "04_Renewable_Energy_Transition_Report.pdf"
+    },
+    {
+        "id": "HS-RE-004",
+        "question": "Find the comparison entry for Offshore Wind.",
+        "correct_page": 3,
+        "correct_file": "04_Renewable_Energy_Transition_Report.pdf"
+    },
+    {
+        "id": "HS-RE-005",
+        "question": "Find the section defining Lithium Iron Phosphate (LFP).",
+        "correct_page": 2,
+        "correct_file": "04_Renewable_Energy_Transition_Report.pdf"
+    }
+]
+
 
 # =========================
 # CLIMATE CHANGE REPORT
@@ -205,6 +343,39 @@ CLIMATE_CHANGE_DATASET = [
     }
 ]
 
+HS_CLIMATE_MITIGATION_DATASET = [
+    {
+        "id": "HS-CM-001",
+        "question": "Find the section introducing the Implementation Decade.",
+        "correct_page": 1,
+        "correct_file": "05_Climate_Change_Mitigation_Report.pdf"
+    },
+    {
+        "id": "HS-CM-002",
+        "question": "Locate the section defining Nature-Based Solutions.",
+        "correct_page": 2,
+        "correct_file": "05_Climate_Change_Mitigation_Report.pdf"
+    },
+    {
+        "id": "HS-CM-003",
+        "question": "Find the comparison involving Industrial Decarbonization.",
+        "correct_page": 3,
+        "correct_file": "05_Climate_Change_Mitigation_Report.pdf"
+    },
+    {
+        "id": "HS-CM-004",
+        "question": "Find the section discussing Grid Modernization.",
+        "correct_page": 3,
+        "correct_file": "05_Climate_Change_Mitigation_Report.pdf"
+    },
+    {
+        "id": "HS-CM-005",
+        "question": "Find the section discussing Blue Economies.",
+        "correct_page": 2,
+        "correct_file": "05_Climate_Change_Mitigation_Report.pdf"
+    }
+]
+
 
 # Combined corpus — used for the full-corpus recall@K run in evaluator.py,
 # in addition to the five per-document runs above.
@@ -214,6 +385,14 @@ ALL_QUESTIONS = (
     + QUANTUM_DATASET
     + RENEWABLE_ENERGY_DATASET
     + CLIMATE_CHANGE_DATASET
+)
+
+HS_ALL_QUESTIONS = (
+    HS_AGI_DATASET
+    + HS_CYBERSECURITY_DATASET
+    + HS_CLIMATE_MITIGATION_DATASET
+    + HS_QUANTUM_DATASET
+    + HS_RENEWABLE_ENERGY_DATASET
 )
 
 """
