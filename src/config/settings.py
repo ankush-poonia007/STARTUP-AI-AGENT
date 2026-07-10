@@ -1,4 +1,4 @@
-EMBEDDING_MODEL = "text-embedding-004"
+EMBEDDING_MODEL = "gemini-embedding-001"
 
 RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
