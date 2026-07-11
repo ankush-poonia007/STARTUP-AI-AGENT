@@ -1,6 +1,11 @@
 
 import time
-from src.rag.rag import query_rag
+from src.rag.rag import (
+    query_rag,
+    ingest_pdf,
+    embed_and_store,
+)
+
 from src.evaluation.ground_truth import (
     ALL_QUESTIONS,
     AGI_DATASET,
@@ -223,7 +228,18 @@ def evaluate(dataset: list, dataset_name: str) :
 
 if __name__ == "__main__":
 
-
+    FILE_LIST = [
+        r'data\uploads\01_Artificial_General_Intelligence_Report.pdf',
+        r'data\uploads\02_Cybersecurity_Threat_Intelligence_Report.pdf',
+        r'data\uploads\03_Quantum_Computing_Research_Report.pdf',
+        r'data\uploads\04_Renewable_Energy_Transition_Report.pdf',
+        r'data\uploads\05_Climate_Change_Mitigation_Report.pdf',
+    ]
+    
+    for file in FILE_LIST:
+        chunks = ingest_pdf(file)
+        embed_and_store(chunks)
+    
     evaluate(AGI_DATASET, "AGI")
     evaluate(CYBERSECURITY_DATASET, "Cybersecurity")
     evaluate(QUANTUM_DATASET, "Quantum Computing")

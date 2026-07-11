@@ -9,8 +9,8 @@ Phase4.md
 template.md
 
 # ── Database ──────────────────────────────────────────
-database/
-database/chroma_db/
+data/BM25
+data/chroma_db/
 
 # ── Input ──────────────────────────────────────────
 inputs/

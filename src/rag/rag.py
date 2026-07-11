@@ -1,6 +1,7 @@
 # BM25 Library 
+import os
 import bm25s
-
+import json 
 import hashlib
 import os
 import time
@@ -17,7 +18,9 @@ from src.config.settings import (
     DEFAULT_VECTOR_TOP_K,
     DEFAULT_RERANK_TOP_K,
     GENERATION_MODEL,
-    EMBEDDING_MODEL
+    EMBEDDING_MODEL,
+    BM25_INDEX_DIR,
+    BM25_CORPUS_FILE,
 )
 
 from src.rag.reranker import rerank
@@ -133,13 +136,91 @@ collection = client.get_or_create_collection(
     name="data_storage"
 )
 
+
+# Create folder if it doesn't exist
+os.makedirs(BM25_INDEX_DIR, exist_ok=True)
+
 # ============================================================
-# Hybird Search Varibales
+# Load Existing Corpus
 # ============================================================
 
-bm25_corpus ={}
-bm25_index  = None
+bm25_corpus = {}
 
+try:
+    with open(BM25_CORPUS_FILE, "r", encoding="utf-8") as file:
+        print("🔄 Loading existing corpus...")
+        bm25_corpus = json.load(file)
+
+except FileNotFoundError:
+    print("🆕 BM25 corpus not found.")
+    
+if not bm25_corpus:
+    print("⚠️ ChromaDB is empty — skipping BM25 rebuild.")
+else:
+    
+    print("🆕 BM25 corpus not found. Rebuilding from ChromaDB...")
+
+    result = collection.get(
+        include=["documents","metadatas"]
+    )
+    
+    documents = result["documents"]
+    metadatas = result["metadatas"]
+    
+    for documents, metadatas in zip(documents,metadatas):
+        
+        chunk = {
+            "text":documents,
+            **metadatas
+        }
+        
+        bm25_corpus[documents] = chunk
+    
+    print("🔄 Rebuilding BM25 index...")
+    full_corpus = list(bm25_corpus.keys())
+    
+    corpus_tokens = bm25s.tokenize(
+        full_corpus,
+        stopwords="english"
+    )
+    
+    
+    bm25_index = bm25s.BM25(corpus= full_corpus)
+    bm25_index.index(corpus_tokens)
+    
+    bm25_index.save(
+        BM25_INDEX_DIR,
+        corpus=full_corpus
+    )
+    
+    with open(BM25_CORPUS_FILE, 'w', encoding="utf-8") as file:
+        json.dump(
+            bm25_corpus,
+            file,
+            ensure_ascii=False,
+            indent=4
+        )
+    
+    print(f"✅ Restored {len(bm25_corpus)} chunks from ChromaDB.")
+    
+    
+# ============================================================
+# Load Existing BM25 Index
+# ============================================================
+
+try:
+    bm25_index = bm25s.BM25.load(
+        BM25_INDEX_DIR,
+        load_corpus=True,
+        mmap=False
+    )
+    print("🔄 Loaded existing BM25 index.")
+
+except FileNotFoundError:
+    print("🆕 No existing BM25 index found.")
+    bm25_index = None
+    
+    
 # ============================================================
 # Gemini API Manager
 # ============================================================
@@ -696,29 +777,49 @@ def embed_and_store(new_chunks: list) -> str:
 
 # ── PHASE 2 — RETRIEVAL ───────────────────────────────────────
 # ============================================================
-# BM25 search functions 
+# Build / Update BM25 Index
 # ============================================================
 
 def build_bm25_index(new_chunks):
-    
+
     if not new_chunks:
         return
-    # Using Globale defined variables
-    global bm25_corpus, bm25_index 
-    
+
+    global bm25_corpus, bm25_index
+
+    # Merge new chunks into existing corpus
     for chunk in new_chunks:
-        bm25_corpus[chunk['text']] = chunk
-    
-    
-    corpus = [
-        chunk['text'] for chunk in bm25_corpus.values()
-    ]
-    
-    corpus_tokens = bm25s.tokenize(corpus, stopwords="english")
-    
-    bm25_index = bm25s.BM25(corpus=corpus)
-    
+        bm25_corpus[chunk["text"]] = chunk
+
+    # Build text corpus
+    full_corpus = list(bm25_corpus.keys())
+
+    # Tokenize
+    corpus_tokens = bm25s.tokenize(
+        full_corpus,
+        stopwords="english"
+    )
+
+    # Rebuild BM25
+    bm25_index = bm25s.BM25(corpus=full_corpus)
     bm25_index.index(corpus_tokens)
+
+    # Save BM25 index
+    bm25_index.save(
+        BM25_INDEX_DIR,
+        corpus=full_corpus
+    )
+
+    # Save corpus dictionary
+    with open(BM25_CORPUS_FILE, "w", encoding="utf-8") as file:
+        json.dump(
+            bm25_corpus,
+            file,
+            ensure_ascii=False,
+            indent=4
+        )
+
+    print(f"✅ BM25 index updated with {len(full_corpus)} chunks.")
     
 
 def bm25_retrieve(user_query, top_k = DEFAULT_VECTOR_TOP_K  ):
@@ -831,7 +932,7 @@ def query_rag(user_input: str, where: dict) -> list:
         
         
         if chunk['text'] in filered_bm25_retrieved_chunks:
-            chunk['fusion_score'] = ( alpha * chunk['vector_sim'] ) + ((1-alpha) * chunk['normalized'])
+            chunk['fusion_score'] = ( alpha * chunk['vector_sim']) + ((1-alpha) * filered_bm25_retrieved_chunks[chunk['text']]['normalized'])
         
         else:
             chunk['fusion_score'] = (alpha * chunk['vector_sim']) + ((1-alpha) * 0)
@@ -844,6 +945,10 @@ def query_rag(user_input: str, where: dict) -> list:
         if text in unified_chunks:
             continue
         chunk['fusion_score'] = (alpha * 0) + ((1-alpha) * chunk['normalized'])
+        chunk['metadata'] = {
+            "page_number": chunk["page_number"],
+            "file_name": chunk["file_name"]
+        }
         unified_chunks[text] = chunk 
     # ============================================================
     # CrossEncoder Reranking
