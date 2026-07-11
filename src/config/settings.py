@@ -13,3 +13,5 @@ GENERATION_MODEL = "gemini-2.5-flash"
 BM25_INDEX_DIR = "data/BM25"
 
 BM25_CORPUS_FILE = os.path.join(BM25_INDEX_DIR, "existing_corpus.json")
+
+MIN_COOLTIME_RETRY = 3 

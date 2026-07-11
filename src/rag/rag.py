@@ -21,6 +21,8 @@ from src.config.settings import (
     EMBEDDING_MODEL,
     BM25_INDEX_DIR,
     BM25_CORPUS_FILE,
+    MIN_COOLTIME_RETRY,
+    
 )
 
 from src.rag.reranker import rerank
@@ -245,18 +247,24 @@ def get_next_available_client() -> tuple[int, genai.Client]:
             "No Gemini API keys have been configured."
         )
 
-    current_time = time.time()
+    
     total_keys = len(api_pool)
+    
+    for i in range ( MIN_COOLTIME_RETRY ):
+        current_time = time.time()
+        
+        for offset in range(total_keys):
 
-    for offset in range(total_keys):
+            index = (_current_api_index + offset) % total_keys
 
-        index = (_current_api_index + offset) % total_keys
+            state = api_pool[index]
 
-        state = api_pool[index]
-
-        if current_time >= state["cooldown_until"]:
-            return index, state["client"]
-
+            if current_time >= state["cooldown_until"]:
+                return index, state["client"]
+                
+        min_wait = min(state["cooldown_until"] for state in api_pool) - time.time()
+        time.sleep(max(0, min_wait))
+    
     raise RuntimeError(
         "All Gemini API keys are currently in cooldown."
     )
