@@ -3,7 +3,6 @@ import os
 import bm25s
 import json 
 import hashlib
-import os
 import time
 
 import chromadb
@@ -26,7 +25,7 @@ from src.config.settings import (
 )
 
 from src.rag.reranker import rerank
-
+from src.prompts.prompts import CLASSIFICATION_PROMPT
 
 # ============================================================
 # Environment
@@ -156,8 +155,8 @@ try:
 except FileNotFoundError:
     print("🆕 BM25 corpus not found.")
     
-if not bm25_corpus:
-    print("⚠️ ChromaDB is empty — skipping BM25 rebuild.")
+if bm25_corpus:
+    print("🔄 Existing BM25 corpus loaded from cache.")
 else:
     
     print("🆕 BM25 corpus not found. Rebuilding from ChromaDB...")
@@ -169,14 +168,14 @@ else:
     documents = result["documents"]
     metadatas = result["metadatas"]
     
-    for documents, metadatas in zip(documents,metadatas):
+    for document, metadata in zip(documents,metadatas):
         
         chunk = {
-            "text":documents,
-            **metadatas
+            "text":document,
+            **metadata
         }
         
-        bm25_corpus[documents] = chunk
+        bm25_corpus[document] = chunk
     
     print("🔄 Rebuilding BM25 index...")
     full_corpus = list(bm25_corpus.keys())
@@ -1103,140 +1102,8 @@ def classify_document_relevance(user_input: str, filenames: str) -> bool:
         DS-033 bare-pronoun limitation can't be fixed by prompt alone.
     """
 
-    prompt = f"""
-You are a document-routing classifier.
+    prompt = CLASSIFICATION_PROMPT.format(user_input= user_input, filenames= filenames)
 
-Your job is to determine whether answering the user's request REQUIRES reading the uploaded documents.
-
-IMPORTANT:
-
-You are NOT deciding whether the documents might be useful.
-
-You are NOT deciding whether the documents contain related information.
-
-You are NOT deciding whether the answer could be improved by reading the documents.
-
-You are ONLY deciding whether the user's request explicitly requires information from the uploaded documents.
-
----
-
-User Query:
-{user_input}
-
-Uploaded Documents:
-{filenames}
-
----
-Return TRUE only if answering the user's request requires reading information from one or more uploaded documents.
-
-Return FALSE if the request can be answered using general knowledge, reasoning, or by generating new content without consulting the uploaded documents.
-
-If uploaded documents are available (indicated by a non-empty filenames list) AND the user's query refers to a specific section or structural part of a document (for example: introduction, methodology, findings, conclusion, executive summary), infer that the user is referring to the uploaded documents and return TRUE.
-
-Do not classify a query as TRUE simply because uploaded filenames exist.
-
-Uploaded filenames only provide evidence that documents are available. The query itself must indicate that the user is asking about the contents of those documents, either explicitly (e.g., "uploaded report", "attached PDF", "pitch deck") or implicitly through document-structural language (e.g., "methodology section", "conclusion", "findings", "executive summary").
-
-Return TRUE only if the user is explicitly asking to:
-
-* summarize an uploaded document
-* analyze the contents of an uploaded document
-
-* extract information from an uploaded document
-* answer questions about information contained in an uploaded document
-* quote, cite, or reference an uploaded document
-* compare uploaded documents
-* explain what an uploaded document says
-* find specific information inside an uploaded document
-
-Examples that should return TRUE:
-
-"Summarize the uploaded PDF"
-"What does the report say about revenue?"
-"Extract all action items from the document"
-"Compare the two uploaded files"
-"What are the key findings in the report?"
-"Analyze the contents of the uploaded document"
-"Summarize the uploaded pitch deck"
-"Extract the valuation from the uploaded term sheet"
-"Compare the uploaded investor decks"
-"What does the uploaded financial model predict?"
-"Extract action items from the uploaded PRD"
-"What does the methodology section describe?"
-"Compare the introduction and conclusion."
-
----
-
-Return FALSE if the user is:
-
-* asking for general knowledge
-* asking for recommendations
-* asking for brainstorming
-* asking for planning
-* asking for strategy
-* asking for advice
-* asking for MVP suggestions
-* asking for tech stack recommendations
-* asking for startup analysis
-* asking for market analysis
-* asking for coding help
-* asking for explanations that can be answered without reading the documents
-
-Return FALSE even if the uploaded documents might contain relevant context.
-
-Return FALSE even if reading the documents could improve the answer.
-
-Return FALSE unless information must be retrieved from the uploaded documents to satisfy the request.
-
-Examples that should return FALSE:
-
-"Suggest a tech stack for my startup"
-"Analyze this startup idea"
-"Give me MVP recommendations"
-"How should I market this product?"
-"What is the weather today?"
-"Explain machine learning"
-"Write a business plan"
-"Generate feature ideas"
-"Create a pitch deck"
-"Write a business plan"
-"Draft a term sheet"
-"Create an investor deck"
-"Build a financial model"
-"What is a methodology?"
-"What is a pitch deck?"
-"What is a financial model?"
-
-Even if a pitch deck, report, notes, or other related documents are uploaded, these examples remain FALSE because the request does not require retrieving information from those documents.
-
----
-
-Decision Rule:
-
-Ask yourself:
-
-"Can I answer this request without opening or reading any uploaded document?"
-
-If YES → return FALSE
-
-If NO → return TRUE
-
----
-
-Output Requirements:
-
-Return ONLY:
-
-true
-
-OR
-
-false
-
-No punctuation.
-No markdown.
-No explanations.
-"""
         # ========================================================
     # Execute Document Classifier
     # ========================================================
