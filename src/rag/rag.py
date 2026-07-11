@@ -1100,6 +1100,7 @@ def classify_document_relevance(user_input: str, filenames: str) -> bool:
         structural safety net eventually (e.g. a second-opinion check using
         actual retrieval similarity scores), not a fourth prompt iteration.
         See LEARNING_LOG.md Phase 4 section for full context.
+        DS-033 bare-pronoun limitation can't be fixed by prompt alone.
     """
 
     prompt = f"""
