@@ -41,6 +41,15 @@ GROQ_API_KEYS       = [k for k in GROQ_API_KEYS if k]
 # ── TAVILY ───────────────────────────────────────────────────
 TAVILY_API_KEY      = os.getenv("TAVILY_API_KEY")
 
+# ── STORAGE CONSTANTS ───────────────────────────────────────────────────
+CHUNK_SIZE = 250
+
+OVERLAP = 50
+
+STEP = CHUNK_SIZE - OVERLAP
+
+MIN_CHUNK_WORDS = 20
+
 
 
 if __name__ == "__main__":
