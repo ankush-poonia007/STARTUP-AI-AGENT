@@ -11,3 +11,4 @@ tavily-python>=0.3.0        # Tavily Search API — real-time market research
 # ── RAG Pipeline ──────────────────────────────────────
 chromadb>=0.5.0             # Persistent vector store
 pdfplumber>=0.10.0          # PDF text extraction
+reportlab >= 4.4.2          # PDF doc geneartion
