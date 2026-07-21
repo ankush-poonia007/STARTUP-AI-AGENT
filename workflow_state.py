@@ -35,7 +35,7 @@ workflow_state = {
     "pipeline_status"     : {},    # per-agent: "success"/"failed"/"skipped"/"pending"
     "agent_retry_count"   : {},    # per-agent: int — tracks retries vs MAX_RETRIES
     "execution_log"       : [],    # per-agent: name + timing + status entries
-    "errors"              : []     # per-agent error log — see Error Log Format above
+    "errors"              : []     # per-agent: error log — see Error Log Format above
 }
 
 if __name__ == "__main__":
