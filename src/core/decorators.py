@@ -69,7 +69,7 @@ def track_timing(func):
             workflow_state['execution_log'].append(
                 {
                     "agent_name":args[0].__class__.__name__,
-                    "time":time.time() - start_time
+                    "execution_time":time.time() - start_time
                 }
             )
             
@@ -109,6 +109,7 @@ def retry_on_failure(func):
                     ) from e 
                 else:
                     time.sleep(MIN_COOLTIME_RETRY)
+                    
     return wrapper
 
 def handle_errors(func):
