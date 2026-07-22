@@ -9,7 +9,6 @@ from reportlab.lib.styles import getSampleStyleSheet
 from src.config.settings import (
     PDF_OUTPUT_DIR,
     CHUNK_SIZE,
-    OVERLAP,
     STEP,
     MIN_CHUNK_WORDS,
     
