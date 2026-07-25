@@ -5,7 +5,8 @@ load_dotenv()
 
 # ── LLM MODELS ───────────────────────────────────────────────
 GROQ_MODEL          = "llama-3.3-70b-versatile"
-GEMINI_MODEL        = "gemini-3.5-flash-lite"
+GEMINI_MODEL        = "gemini-2.5-flash"
+GEMINI_LITE_MODEL   = "gemini-3.5-flash-lite"
 EMBEDDING_MODEL     = "gemini-embedding-001"
 RERANKER_MODEL      = "BAAI/bge-reranker-v2-m3"
 
