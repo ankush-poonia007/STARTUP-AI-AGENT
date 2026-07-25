@@ -415,3 +415,74 @@ No punctuation.
 No markdown.
 No explanations.
 """
+
+ORCHESTRATOR_PROMPT    = """
+
+"""
+
+INTENT_ROUTER_PROMPT   = """
+
+"""
+
+MARKET_RESEARCH_PROMPT = """
+
+"""
+
+WEB_SEARCH_PROMPT      = """
+
+"""
+
+RAG_AGENT_PROMPT       = """
+
+"""
+
+MVP_ADVISOR_PROMPT     = """
+
+"""
+
+TECH_ADVISOR_PROMPT    = """
+
+"""
+
+RISK_ANALYST_PROMPT    = """
+
+"""
+
+STARTUP_SCORER_PROMPT  = """
+
+"""
+
+RECOMMENDATION_PROMPT  = """
+
+"""
+
+IDEA_GENERATION_PROMPT = """
+
+"""
+
+NURTURING_PROMPT       = """
+
+"""
+
+ADVANCEMENT_PROMPT     = """
+
+"""
+
+GENERAL_CHAT_PROMPT    = """
+
+"""
+
+REPORT_WRITER_PROMPT   = """
+
+"""
+
+PDF_GENERATOR_PROMPT   = """
+
+""" 
+
+LLM_JUDGE_MID_PROMPT   = """
+
+"""
+LLM_JUDGE_FINAL_PROMPT = """
+
+"""
