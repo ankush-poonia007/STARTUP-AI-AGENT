@@ -13,11 +13,11 @@ def embedding_call(chunks:list[str]):
         contents=text
     )
     
-def text_call(user_prompt):
+def text_call(user_prompt,gemini_model=GEMINI_MODEL):
     client = genai.Client(api_key=GEMINI_API_KEYS[0])
     
     return client.models.generate_content(
-        model=GEMINI_MODEL,
+        model=gemini_model,
         contents=user_prompt
     ).text 
     
