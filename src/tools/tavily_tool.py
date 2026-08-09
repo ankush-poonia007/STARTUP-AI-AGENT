@@ -5,14 +5,13 @@ from src.config.settings import (
 )
 
 
-def ask_tavily(user_query:str, country:str = "global"):
+def ask_tavily(user_query:str):
     
     client = TavilyClient(api_key=TAVILY_API_KEY)
     return client.search(
         query=user_query,
         include_answer="advanced",
         search_depth="basic",
-        country = country,
         exclude_domains= ["facebook.com","instagram.com","x.com","youtube.com"],
         max_results=TAVILY_MAX_RESULTS
     )["results"]
