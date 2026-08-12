@@ -4,7 +4,7 @@ workflow_state = {
 
     # ── INPUTS ──────────────────────────────────────────
     "user_input"           : "",     # raw user message
-    "pitch_deck_text"      : "",     # extracted PDF text, "" if none
+    "pitch_deck_text"      : [],     # extracted PDF text, "" if none
 
     # ── LLM AS JUDGE  ───────────────────────────────────
     "judge_feedback": {
