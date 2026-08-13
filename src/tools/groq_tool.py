@@ -18,4 +18,5 @@ def text_call ( prompt: list):
 if __name__=="__main__":
     print("Done")
     
-    print(text_call("What is ai").choices[0].message.content)
+    response = text_call("what is LangChain and LangGraph. Can you diffrientiate them on bases of usecase?")
+    print(response)
