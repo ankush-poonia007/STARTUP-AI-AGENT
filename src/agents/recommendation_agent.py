@@ -1,30 +1,49 @@
-""" 
+"""
 File        : agents/recommendation_agent.py
 Triggered By: full_analysis, nurturing
 Tools       : tavily_tool.py + groq_tool.py
-Input       : ALL previous workflow_state outputs
-Output      : workflow_state["recommendations"]
 
-Output Format:
+Input:
+    workflow_state["user_input"]
+        Original startup idea or user request used to construct
+        the competitor-improvement search query.
+
+    workflow_state["startup_score"]
+        Startup viability assessment produced by StartupScorerAgent,
+        including the overall score, dimension breakdown, and
+        highest-risk flag.
+
+    workflow_state["risk_analysis"]
+        Feature-level and business risks identified by
+        RiskAnalystAgent.
+
+Output:
     workflow_state["recommendations"] → list of dicts
         [
             {
                 "title"         : str,  # short improvement title
                 "description"   : str,  # what to improve + why
                 "evidence"      : str,  # URL or search evidence
-                "linked_weakness": str  # which agent flagged this weakness
+                "linked_weakness": str  # weakness identified upstream
             },
-            ...  # 3-5 items maximum
+            ...
         ]
 
+        Maximum of 3-5 actionable recommendations.
+
 Responsibilities:
-- Run FRESH Tavily search — comparison + improvement focused
+- Run a fresh Tavily search focused on competitor comparison
+  and startup improvement opportunities
 - Query: "how can [startup type] improve vs competitors"
-- Generate 3-5 specific actionable improvements
-- Ground each recommendation in fresh search evidence
-- Tie each recommendation to a specific weakness from previous agents
+- Identify actionable improvement opportunities
+- Ground recommendations in fresh search evidence
+- Tie each recommendation to a specific weakness identified
+  by upstream analysis
+- Return recommendations in the required JSON structure
+- Validate and parse the LLM-generated JSON response
 """
-from src.core.decorators import ( 
+
+from src.core.decorators import (
     handle_errors,
     log_execution,
     track_timing,
@@ -35,73 +54,145 @@ from src.prompts.prompts import RECOMMENDATION_PROMPT
 from src.tools.tavily_tool import ask_tavily
 from src.tools.groq_tool import text_call
 
-import json 
+import json
 import re
 
+
 class RecommendationAgent:
-    
+    """
+    Recommendation Agent responsible for generating actionable startup
+    improvements using fresh external research and weaknesses identified
+    by upstream agents.
+
+    This agent operates in the full_analysis and nurturing workflows.
+
+    The agent combines:
+        - The original startup idea
+        - The highest-risk area identified by StartupScorerAgent
+        - Detailed risks identified by RiskAnalystAgent
+        - Fresh competitor and improvement research from Tavily
+
+    The purpose of the agent is to convert identified weaknesses into
+    concrete, evidence-backed recommendations rather than generating
+    generic startup advice.
+
+    Input State:
+        workflow_state["user_input"]:
+            Original startup idea or user request.
+
+        workflow_state["startup_score"]:
+            Quantitative startup assessment containing the overall score,
+            dimension breakdown, and highest-risk flag.
+
+        workflow_state["risk_analysis"]:
+            Detailed feature-level and business risk analysis.
+
+    External Evidence:
+        Tavily is queried with a competitor-focused improvement question.
+        The returned search results are provided to the LLM as supporting
+        evidence for recommendation generation.
+
+    Output State:
+        workflow_state["recommendations"]:
+            List of structured recommendation dictionaries containing
+            a title, description, evidence, and linked weakness.
+
+        workflow_state["pipeline_status"]["RecommendationAgent"]:
+            Updated to "success" when the agent completes successfully.
+
+    Notes:
+        Recommendations should be specific and actionable.
+
+        Each recommendation should be grounded in fresh search evidence
+        and connected to a weakness identified by the upstream analysis.
+        The agent should not invent evidence or unsupported URLs.
+    """
+
     @handle_errors
     @log_execution
     @track_timing
     @retry_on_failure
-    def run(self, workflow_state:dict)->dict:
-        """_summary_
-
-        Args:
-            workflow_state (dict): _description_
-
-        Returns:
-            dict: _description_
+    def run(self, workflow_state: dict) -> dict:
         """
-        
-        """_summary_
+        Generate evidence-backed startup improvement recommendations.
 
-        Returns:
-            _type_: _description_
-        """
-        """
-        INPUT
-        └── workflow_state: user_input, startup_score, 
-                            risk_analysis, mvp_suggestions
+        Parameters
+        ----------
+        workflow_state : dict
+            Shared state passed between agents in the multi-agent workflow.
 
-        STEP 1 → Extract highest_risk_flag from startup_score
-        STEP 2 → Extract key risks from risk_analysis
-        STEP 3 → Build Tavily query f-string using extracted data
-        STEP 4 → Call Tavily → store raw results
-        STEP 5 → Call Groq with: raw results + extracted weaknesses
-                → instruct JSON output (list of dicts)
-        STEP 6 → json.loads() → validate structure
-        STEP 7 → Write to workflow_state["recommendations"]
-        STEP 8 → Update pipeline_status
-        STEP 9 → Return workflow_state
+            Required fields:
+                "user_input":
+                    Original startup idea or user request.
 
-        OUTPUT
-        └── workflow_state["recommendations"] → list of dicts
-            {title, description, evidence, linked_weakness}
+                "startup_score":
+                    Startup viability assessment and highest-risk flag.
+
+                "risk_analysis":
+                    Detailed risks identified by RiskAnalystAgent.
+
+        Returns
+        -------
+        dict
+            Updated workflow state containing the generated
+            recommendations under "recommendations" and the updated
+            RecommendationAgent execution status.
+
+        Notes
+        -----
+        The agent first performs a fresh Tavily search focused on how
+        the startup can improve relative to competitors.
+
+        The search results, highest-risk flag, and risk analysis are then
+        supplied to the Groq model to generate structured recommendations.
+
+        The LLM response is cleaned of accidental Markdown code fences,
+        parsed as JSON, and stored in the workflow state.
         """
+
+        # ----------------------------------------------------
+        # 1. Read startup context and upstream analysis
+        # ----------------------------------------------------
+
         user_input = workflow_state["user_input"]
-        
-        # startup_idea, startup_type = workflow_state["startup_idea"], workflow_state["startup_type"]
-        
-        highest_risk_flag = workflow_state["startup_score"]["highest_risk_flag"]
-        
-        risk_analysis = workflow_state["risk_analysis"]
-        
-        tavily_prompt = f"how can {user_input} improve vs competitors"
-        
-        # tavily_prompt = f"how can {startup_idea} type of {startup_type} impove vs competitors"
-        
-        tavily_response = ask_tavily(
-            user_query= tavily_prompt
+
+        highest_risk_flag = (
+            workflow_state["startup_score"]["highest_risk_flag"]
         )
-        
+
+        risk_analysis = workflow_state["risk_analysis"]
+
+        # ----------------------------------------------------
+        # 2. Build fresh competitor-improvement search query
+        # ----------------------------------------------------
+
+        tavily_prompt = (
+            f"how can {user_input} improve vs competitors"
+        )
+
+        # ----------------------------------------------------
+        # 3. Run fresh Tavily search
+        # ----------------------------------------------------
+
+        tavily_response = ask_tavily(
+            user_query=tavily_prompt
+        )
+
+        # ----------------------------------------------------
+        # 4. Prepare system prompt
+        # ----------------------------------------------------
+
         system_prompt = RECOMMENDATION_PROMPT
-        
+
+        # ----------------------------------------------------
+        # 5. Build recommendation generation prompt
+        # ----------------------------------------------------
+
         user_prompt = f"""
-Startup: 
+Startup:
 {user_input}
 
-Highest Risk Flag: 
+Highest Risk Flag:
 {highest_risk_flag}
 
 Risk Analysis:
@@ -111,96 +202,148 @@ Search Results:
 {chr(10).join([f"- URL: {r['url']}{chr(10)}  Content: {r['content']}" for r in tavily_response])}
 
 Generate the JSON recommendation array now.
-
 """
-        
+
+        # ----------------------------------------------------
+        # 6. Prepare LLM messages
+        # ----------------------------------------------------
+
         messages = [
             {
-                "role":"system",
-                "content":system_prompt
+                "role": "system",
+                "content": system_prompt
             },
             {
-                "role":"user",
-                "content":user_prompt
+                "role": "user",
+                "content": user_prompt
             }
         ]
-        
+
+        # ----------------------------------------------------
+        # 7. Generate recommendations
+        # ----------------------------------------------------
+
         groq_response = text_call(
-            prompt= messages
+            prompt=messages
         )
-        
+
+        # ----------------------------------------------------
+        # 8. Clean accidental Markdown code fences
+        # ----------------------------------------------------
+
         clean_response = re.sub(
             r"^```(?:json)?\s*|\s*```$",
             "",
             groq_response.strip(),
             flags=re.IGNORECASE
         )
-        
-        data = json.loads(clean_response)
-        
+
+        # ----------------------------------------------------
+        # 9. Parse LLM JSON response
+        # ----------------------------------------------------
+
+        data = json.loads(
+            clean_response
+        )
+
+        # ----------------------------------------------------
+        # 10. Store recommendations in workflow state
+        # ----------------------------------------------------
+
         workflow_state["recommendations"] = (
             data
         )
+
+        # ----------------------------------------------------
+        # 11. Update pipeline status
+        # ----------------------------------------------------
+
         workflow_state["pipeline_status"]["RecommendationAgent"] = (
             "success"
         )
+
+        # ----------------------------------------------------
+        # 12. Return updated workflow state
+        # ----------------------------------------------------
+
         return workflow_state
-    
+
+
+# ----------------------------------------------------
+# LOCAL TEST
+# ----------------------------------------------------
+
 if __name__ == "__main__":
-    
+
+    # ----------------------------------------------------
+    # 1. Prepare mock workflow state
+    # ----------------------------------------------------
+
     MOCK_STATE_RECOMMENDATION = {
 
         # ── INPUTS ──────────────────────────────────────────
-        "user_input": "AI-powered tiffin delivery platform for college students",
-        "pitch_deck_text"      : [],     # extracted PDF text chunks, [] if none
 
-        # ── LLM AS JUDGE  ───────────────────────────────────
+        "user_input": "AI-powered tiffin delivery platform for college students",
+
+        "pitch_deck_text": [],
+
+        # ── LLM AS JUDGE ────────────────────────────────────
+
         "judge_feedback": {
             "mid_pipeline": "",
-            "final"       : ""
+            "final": ""
         },
-        
+
         # ── INTENT & PLAN ───────────────────────────────────
-        "intent"               : "",     # classified by IntentRouterAgent
-        "execution_plan"       : [],    # ordered agent execution list with parallel flags
 
-        # ── AGENT OUTPUTS ────────────────────────────────────
-        "market_data"          : "",     # MarketResearchAgent — plain text + citations
-        "web_search_results"   : "",     # WebSearchAgent —  teplainxt + citations
-        "rag_context"          : [],    # RAGAgent — list of chunk dicts with metadata
-        "mvp_suggestions"      : "",     # MVPAdvisorAgent — structured plain text
-        "tech_recommendations" : "",     # TechAdvisorAgent — structured plain text
+        "intent": "",
+
+        "execution_plan": [],
+
+        # ── AGENT OUTPUTS ───────────────────────────────────
+
+        "market_data": "",
+
+        "web_search_results": "",
+
+        "rag_context": [],
+
+        "mvp_suggestions": "",
+
+        "tech_recommendations": "",
+
         "risk_analysis": """
-    ## Feature Risks
+## Feature Risks
 
-    ### Feature: Weekly Tiffin Subscription
-    Risk: Customer churn if meal quality or menu variety is inconsistent.
-    Why: Students may switch providers when meals become repetitive or unreliable.
-    Impact: High
-    Mitigation: Introduce menu rotation, quality monitoring, and subscription feedback loops.
+### Feature: Weekly Tiffin Subscription
+Risk: Customer churn if meal quality or menu variety is inconsistent.
+Why: Students may switch providers when meals become repetitive or unreliable.
+Impact: High
+Mitigation: Introduce menu rotation, quality monitoring, and subscription feedback loops.
 
-    ### Feature: Scheduled Meal Delivery
-    Risk: Late or missed deliveries can reduce customer trust.
-    Why: Students depend on predictable meal timing around classes and schedules.
-    Impact: High
-    Mitigation: Start with limited delivery zones, defined delivery windows, and operational tracking.
+### Feature: Scheduled Meal Delivery
+Risk: Late or missed deliveries can reduce customer trust.
+Why: Students depend on predictable meal timing around classes and schedules.
+Impact: High
+Mitigation: Start with limited delivery zones, defined delivery windows, and operational tracking.
 
-    ### Feature: Digital Payments
-    Risk: Payment failures may interrupt subscription purchases.
-    Why: Failed transactions can create friction during onboarding and renewal.
-    Impact: Medium
-    Mitigation: Support reliable payment flows and provide clear retry/failure handling.
+### Feature: Digital Payments
+Risk: Payment failures may interrupt subscription purchases.
+Why: Failed transactions can create friction during onboarding and renewal.
+Impact: Medium
+Mitigation: Support reliable payment flows and provide clear retry/failure handling.
 
-    ## Highest Business Risk
+## Highest Business Risk
 
-    Risk: Customer retention and delivery reliability.
+Risk: Customer retention and delivery reliability.
 
-    Reason:
-    The business depends on recurring subscriptions, so poor food consistency or unreliable delivery could increase churn and weaken unit economics.
+Reason:
+The business depends on recurring subscriptions, so poor food consistency or unreliable delivery could increase churn and weaken unit economics.
 
-    Mitigation:
-    Validate retention through a small geographic pilot, monitor repeat orders and cancellations, and improve delivery operations before expanding.
-        """,
+Mitigation:
+Validate retention through a small geographic pilot, monitor repeat orders and cancellations, and improve delivery operations before expanding.
+""",
+
         "startup_score": {
             "score": 68,
             "reasoning": (
@@ -216,27 +359,50 @@ if __name__ == "__main__":
             },
             "highest_risk_flag": "risk"
         },
-        "recommendations"      : [],    # RecommendationAgent — list of dicts
-        "generated_ideas"      : [],    # IdeaGenerationAgent — list of ranked dicts
-        "nurtured_idea"        : "",     # NurturingAgent — structured plain text
-        "advancement_plan"     : "",     # AdvancementAgent — structured plain text
-        "chat_response"        : "",     # GeneralChatAgent — plain conversational text
-        "final_report"         : "",     # ReportWriterAgent — full markdown document
-        "pdf_path"             : "",     # PDFGeneratorAgent — file path, "" if none
 
-        # ── PIPELINE TRACKING ────────────────────────────────
-        "pipeline_status"      : {},    # per-agent: "success"/"failed"/"skipped"/"pending"
-        "agent_retry_count"    : {},    # per-agent: int — tracks retries vs MAX_RETRIES
-        "execution_log"        : [],    # per-agent: name + timing + status entries
-        "errors"               : []     # per-agent: error log — see Error Log Format above
-        
+        "recommendations": [],
+
+        "generated_ideas": [],
+
+        "nurtured_idea": "",
+
+        "advancement_plan": "",
+
+        "chat_response": "",
+
+        "final_report": "",
+
+        "pdf_path": "",
+
+        # ── PIPELINE TRACKING ───────────────────────────────
+
+        "pipeline_status": {},
+
+        "agent_retry_count": {},
+
+        "execution_log": [],
+
+        "errors": []
     }
-    
-    
+
+    # ----------------------------------------------------
+    # 2. Initialize Recommendation Agent
+    # ----------------------------------------------------
+
     agent = RecommendationAgent()
-    
+
+    # ----------------------------------------------------
+    # 3. Run recommendation pipeline
+    # ----------------------------------------------------
+
     workflow_state = agent.run(
         MOCK_STATE_RECOMMENDATION.copy()
     )
-    
-    print(workflow_state["recommendations"])
+
+    # ----------------------------------------------------
+    # 4. Print generated recommendations
+    # ----------------------------------------------------
+
+    print(
+        workflow_state["recommendations"]
+    )
