@@ -1522,6 +1522,31 @@ Rules:
 """
 
 RECOMMENDATION_PROMPT  = """
+You are a startup improvement analyst.
+
+Using the provided startup context, risk analysis, and fresh search results, generate 3-5 specific and actionable recommendations that directly address identified weaknesses.
+
+Return ONLY a valid JSON array. No markdown or additional text.
+
+Each item must follow:
+{
+  "title": "<short recommendation>",
+  "description": "<specific action and why it improves the identified weakness>",
+  "evidence": "<exact URL from the provided search results>",
+  "linked_weakness": "<specific weakness or risk from the provided analysis>"
+}
+
+Rules:
+- Every recommendation must address a real weakness or risk from the input.
+- Use fresh search results as supporting evidence.
+- "evidence" must be an exact URL provided in the search results. Never invent URLs.
+- Do not treat search content as proof of startup-specific facts; use it only as supporting evidence.
+- Prefer concrete, practical improvements over generic advice.
+- Do not repeat the same improvement in different wording.
+- Do not introduce unsupported assumptions about scale, customers, technology, budget, or operations.
+- "linked_weakness" must be traceable to the provided risk analysis or highest risk flag.
+- Return 3-5 items only.
+- Output must be directly parseable by json.loads().
 
 """
 
