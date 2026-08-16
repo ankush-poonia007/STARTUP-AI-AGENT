@@ -3,67 +3,72 @@ File        : agents/intent_router_agent.py
 Triggered By: Every request — called first by OrchestratorAgent
 Tools       : groq_tool.py
 Input       : workflow_state["user_input"] + workflow_state["pitch_deck_text"]
-Output      : workflow_state["intent"] + workflow_state["execution_plan"]
+Output      : workflow_state["startup_idea"]
+             + workflow_state["startup_type"]
+             + workflow_state["intent"]
+             + workflow_state["execution_plan"]
 
 Purpose:
-    Intent_Router_Agent is responsible for identifying what the user
-    is asking for and converting that intent into a concrete execution
-    plan for the multi-agent workflow.
+    Intent_Router_Agent is the workflow decision layer. It first converts
+    the user's raw input into a normalized startup idea and startup type,
+    then classifies the user's intent and builds the corresponding
+    execution plan.
 
-    It does not execute downstream agents.
+Processing Sequence:
+    1. Receive the user's original input.
+    2. Extract a normalized startup idea using STARTUP_IDEA_PROMPT.
+    3. Classify the startup type using STARTUP_TYPE_PROMPT.
+    4. Classify the user's workflow intent using INTENT_ROUTER_PROMPT.
+    5. Normalize and validate the returned intent.
+    6. Check whether pitch-deck context is available.
+    7. Build the execution plan for the selected intent.
+    8. Store the derived values in workflow_state.
 
-    Its job ends after:
-        1. Classifying the user's request.
-        2. Normalizing the classification result.
-        3. Determining whether pitch-deck context is available.
-        4. Selecting the corresponding workflow.
-        5. Storing that workflow in workflow_state.
+Output State:
+    workflow_state["startup_idea"] → str
+        Clean startup concept derived from the user's original input.
 
-Supported Intents:
-    - full_analysis
-    - partial_idea
-    - idea_exploration
-    - nurturing
-    - advancement
-    - general_chat
-    - pdf_request
+    workflow_state["startup_type"] → str
+        Startup category/type inferred from the normalized startup idea.
 
-Execution Plan:
-    The selected execution plan contains:
-        - execution_order:
-            Ordered representation of the agents involved in the workflow.
+    workflow_state["intent"] → str
+        One of:
+            "full_analysis"
+            "partial_idea"
+            "idea_exploration"
+            "nurturing"
+            "advancement"
+            "general_chat"
+            "pdf_request"
 
-        - execution_plan:
-            Batch-level instructions describing:
-                - batch number
-                - agents in that batch
-                - whether they can execute in parallel
-                - optional execution notes
+    workflow_state["execution_plan"] → dict
+        Contains execution_order and execution_plan for the selected
+        workflow.
 
 RAG Behaviour:
-    RAGAgent is included only when pitch_deck_text contains data.
-
-    This allows workflows to operate normally when no pitch deck is
-    supplied while enabling document-grounded analysis when a pitch deck
-    is available.
+    RAGAgent is included only when workflow_state["pitch_deck_text"]
+    contains content.
 
 LLM Judge Behaviour:
     LLMJudgeAgent is not included as a normal execution-plan agent.
-
-    The orchestrator owns judge execution and triggers:
-        - run_mid() after the MVPAdvisorAgent stage for full_analysis.
-        - run_final() after ReportWriterAgent for supported workflows.
+    OrchestratorAgent owns the mid-pipeline and final judge checkpoints.
 
 Failure Handling:
-    Invalid LLM classification → fall back to "general_chat".
-
+    Invalid intent classification falls back to "general_chat".
     Decorators handle execution-level failures and retry behaviour.
 
-    The resulting workflow state is returned to OrchestratorAgent,
-    which is responsible for executing the selected plan.
+Ownership:
+    This agent decides what workflow should run and prepares the
+    information required by downstream agents. It does not execute
+    downstream agents itself.
 """
 
-from src.prompts.prompts import INTENT_ROUTER_PROMPT
+from src.prompts.prompts import (
+    INTENT_ROUTER_PROMPT,
+    STARTUP_IDEA_PROMPT,
+    STARTUP_TYPE_PROMPT
+)
+
 from tests.mock_workflow_state import MOCK_STATE_EMPTY
 from src.tools.groq_tool import text_call
 
@@ -77,58 +82,33 @@ from src.core.decorators import (
 
 class Intent_Router_Agent:
     """
-    Classifies the user's request and constructs the execution plan
-    required by the multi-agent startup-analysis workflow.
+Intent Router responsible for preparing startup context, classifying
+the user's requested workflow, and constructing the execution plan.
 
-    Intent_Router_Agent acts as the decision layer between the user's
-    request and the workflow execution layer.
+Responsibilities:
+    - Convert raw user input into a normalized startup idea.
+    - Identify the startup type from the normalized idea.
+    - Classify the requested workflow intent.
+    - Normalize and validate the LLM's intent response.
+    - Apply the general_chat fallback for unsupported intents.
+    - Detect whether pitch-deck context is available.
+    - Conditionally include RAGAgent in applicable workflows.
+    - Build the execution order and batch execution plan.
+    - Store all routing outputs in workflow_state.
 
-    Responsibilities:
-        - Read the user's input from workflow_state.
-        - Classify the request using INTENT_ROUTER_PROMPT.
-        - Normalize the LLM classification.
-        - Validate the classification against supported intents.
-        - Fall back to general_chat when the classification is invalid.
-        - Detect whether pitch-deck context is available.
-        - Conditionally include RAGAgent when pitch-deck text exists.
-        - Construct the execution plan for the selected workflow.
-        - Store the selected intent and plan in workflow_state.
-        - Mark IntentRouterAgent as successful.
+The class is a decision layer only. It does not execute the downstream
+agents listed in the execution plan.
 
-    Supported Intents:
-        full_analysis:
-            Run the complete startup-analysis workflow.
+Judge Ownership:
+    LLMJudgeAgent is deliberately excluded from execution plans.
+    OrchestratorAgent is responsible for triggering run_mid() and
+    run_final() at the appropriate workflow checkpoints.
 
-        partial_idea:
-            Expand and evaluate an incomplete startup idea.
-
-        idea_exploration:
-            Generate and explore startup ideas.
-
-        nurturing:
-            Improve and develop an existing startup concept.
-
-        advancement:
-            Continue or advance an existing startup workflow.
-
-        general_chat:
-            Handle requests that do not require a specialized
-            startup-analysis workflow.
-
-        pdf_request:
-            Handle requests specifically related to PDF generation.
-
-    Important:
-        This class only decides what should execute.
-        It does not execute the selected agents itself.
-
-        OrchestratorAgent consumes the execution plan and performs
-        the actual workflow execution.
-
-        LLMJudgeAgent checkpoints are intentionally handled by
-        OrchestratorAgent rather than being represented as normal
-        execution-plan agents.
-    """
+Startup Context:
+    startup_idea and startup_type are prepared before intent routing so
+    downstream agents can work with a normalized representation of the
+    startup instead of relying only on the original user wording.
+"""
 
     @log_execution
     @track_timing
@@ -139,54 +119,52 @@ class Intent_Router_Agent:
             workflow_state: dict
         ) -> dict:
         """
-        Detect the user's intent and attach the corresponding
-        execution plan to workflow_state.
+Prepare startup context, classify the user's workflow intent, and attach
+the selected execution plan to workflow_state.
 
-        Parameters
-        ----------
-        workflow_state : dict
-            Shared workflow state containing the user's original
-            input and pitch-deck text.
+Parameters
+----------
+workflow_state : dict
+    Shared workflow state containing the user's original input and
+    pitch-deck text.
 
-        Returns
-        -------
-        dict
-            Updated workflow state containing:
-                - workflow_state["intent"]
-                - workflow_state["execution_plan"]
-                - successful IntentRouterAgent pipeline status
+Returns
+-------
+dict
+    Updated workflow state containing:
+        - startup_idea
+        - startup_type
+        - intent
+        - execution_plan
+        - successful IntentRouterAgent pipeline status
 
-        Processing Stages
-        -----------------
-        1. Build the intent-classification prompt.
-        2. Send the user's input to the configured LLM.
-        3. Validate the returned intent against supported values.
-        4. Normalize the LLM response.
-        5. Fall back to general_chat when necessary.
-        6. Check whether pitch-deck text is available.
-        7. Mark the router as successful.
-        8. Construct the workflow-specific execution plans.
-        9. Store the selected execution plan.
-        10. Return the updated workflow state.
+Processing Stages
+-----------------
+1. Build the startup-idea extraction prompt.
+2. Generate and store workflow_state["startup_idea"].
+3. Build the startup-type classification prompt.
+4. Generate and store workflow_state["startup_type"].
+5. Build the intent-classification prompt.
+6. Classify and normalize the workflow intent.
+7. Apply the general_chat fallback when necessary.
+8. Check pitch-deck availability for conditional RAG execution.
+9. Mark the router as successful.
+10. Build the workflow-specific execution plans.
+11. Store the selected plan in workflow_state.
+12. Return the updated workflow state.
 
-        RAG Behaviour
-        -------------
-        RAGAgent is conditionally included when
-        workflow_state["pitch_deck_text"] contains content.
+Important:
+    startup_idea and startup_type are derived context values used to
+    improve downstream workflow consistency. They do not replace the
+    original user_input.
 
-        This keeps document retrieval optional while allowing
-        pitch-deck-grounded workflows when supporting documents
-        are available.
+RAG:
+    RAGAgent is conditionally included when pitch_deck_text is non-empty.
 
-        LLM Judge Behaviour
-        -------------------
-        LLMJudgeAgent is intentionally excluded from the normal
-        execution batches.
-
-        OrchestratorAgent is responsible for triggering its
-        mid-pipeline and final validation checkpoints at the
-        appropriate stages.
-        """
+LLM Judge:
+    LLMJudgeAgent is intentionally absent from normal execution batches.
+    OrchestratorAgent owns the judge checkpoints.
+"""
 
         # ----------------------------------------------------
         # 1. Build intent-classification prompt
@@ -204,19 +182,69 @@ class Intent_Router_Agent:
                 "content": workflow_state["user_input"]
             }
         ]
+        
+        # ----------------------------------------------------
+        # 2. Build normalized startup idea
+        # ----------------------------------------------------
+        # Convert the user's original wording into a cleaner startup
+        # concept that can be reused consistently by downstream agents.
+
+        startup_idea_prompt = [
+            {
+                "role":"system",
+                "content":STARTUP_IDEA_PROMPT
+            },
+            {
+                "role":"user",
+                "content": f"User Input : {workflow_state['user_input']}"
+            }
+        ]
+
+        startup_idea = text_call(
+            messages=startup_idea_prompt
+        )
+
+        workflow_state["startup_idea"] = (
+                    startup_idea
+            )
 
         # ----------------------------------------------------
-        # 2. Classify user intent
+        # 3. Classify startup type
+        # ----------------------------------------------------
+        # Use the normalized startup idea to identify its broad
+        # startup/domain category for downstream analysis.
+
+        startup_type_prompt = [
+            {
+                "role":"system",
+                "content":STARTUP_TYPE_PROMPT
+            },
+            {
+                "role":"user",
+                "content":f"Startup Idea: {startup_idea}"
+            }
+        ]
+
+        startup_type = text_call(
+            messages=startup_type_prompt
+        )
+
+        workflow_state["startup_type"] = (
+            startup_type
+        )
+
+        # ----------------------------------------------------
+        # 4. Classify user intent
         # ----------------------------------------------------
         # Send the prepared prompt to the LLM and receive the
-        # raw intent classification.
+        # raw workflow-intent classification.
 
         intent_response = text_call(
             messages=intent_prompt
         )
 
         # ----------------------------------------------------
-        # 3. Validate supported intents
+        # 5. Validate supported intents
         # ----------------------------------------------------
         # Define the complete set of workflow names that the
         # router is allowed to produce.
@@ -232,7 +260,7 @@ class Intent_Router_Agent:
         }
 
         # ----------------------------------------------------
-        # 4. Normalize LLM output
+        # 6. Normalize LLM output
         # ----------------------------------------------------
         # Convert the model response into a predictable format
         # so minor formatting differences do not break routing.
@@ -249,7 +277,7 @@ class Intent_Router_Agent:
         )
 
         # ----------------------------------------------------
-        # 4A. Apply safe fallback for unsupported intent
+        # 6A. Apply safe fallback for unsupported intent
         # ----------------------------------------------------
         # If the model returns an unsupported value, route the
         # request to the general-chat workflow.
@@ -260,7 +288,7 @@ class Intent_Router_Agent:
         workflow_state["intent"] = normalized_intent
 
         # ----------------------------------------------------
-        # 5. Check whether pitch-deck context is available
+        # 7. Check whether pitch-deck context is available
         # ----------------------------------------------------
         # Determine whether the user supplied pitch-deck content.
         # This flag controls conditional RAGAgent inclusion.
@@ -270,7 +298,7 @@ class Intent_Router_Agent:
         )
 
         # ----------------------------------------------------
-        # 6. Mark IntentRouterAgent as successful
+        # 8. Mark IntentRouterAgent as successful
         # ----------------------------------------------------
         # The routing stage is complete once the intent has been
         # classified and the workflow can be constructed.
@@ -280,11 +308,12 @@ class Intent_Router_Agent:
         ] = "success"
 
         # ----------------------------------------------------
-        # 7. Build intent-specific execution plans
+        # 9. Build intent-specific execution plans
         # ----------------------------------------------------
         # Construct the execution configuration for every supported
-        # intent. Only the plan matching normalized_intent is stored
-        # in workflow_state below.
+        # intent. The selected plan is stored in workflow_state below.
+        # Startup idea/type preparation has already completed before
+        # this stage and is now available to downstream agents.
 
         execution_pipeline = {
 
@@ -670,7 +699,7 @@ class Intent_Router_Agent:
         }
 
         # ----------------------------------------------------
-        # 8. Store selected execution plan
+        # 10. Store selected execution plan
         # ----------------------------------------------------
         # Select the workflow configuration corresponding to the
         # normalized user intent.
@@ -680,7 +709,7 @@ class Intent_Router_Agent:
         )
 
         # ----------------------------------------------------
-        # 9. Return updated workflow state
+        # 11. Return updated workflow state
         # ----------------------------------------------------
         # Routing is complete. OrchestratorAgent will now consume
         # the selected execution plan and execute the workflow.
@@ -731,18 +760,27 @@ if __name__ == "__main__":
     )
 
     # ------------------------------------------------
-    # 5. Display detected intent
+    # 5. Display derived startup context
     # ------------------------------------------------
-    # Verify which workflow was selected.
+    # Verify the normalized startup idea and inferred startup type
+    # produced before intent classification.
 
     print(
         workflow_state["intent"]
     )
 
+    print(
+        workflow_state["startup_idea"]
+    )
+    
+    print(
+        workflow_state["startup_type"]
+    )
     # ------------------------------------------------
-    # 6. Display generated execution plan
+    # 6. Display detected intent and execution plan
     # ------------------------------------------------
-    # Verify the batches and agents selected for the workflow.
+    # Verify the selected workflow and the batches/agents that
+    # Intent_Router_Agent assigned to it.
 
     print(
         workflow_state["execution_plan"]
