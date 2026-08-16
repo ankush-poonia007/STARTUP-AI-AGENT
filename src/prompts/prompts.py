@@ -469,11 +469,39 @@ Analyze the incoming user message against the criteria above. Select the single 
 </execution>
 """
 
-MARKET_RESEARCH_PROMPT = """
+STARTUP_IDEA_PROMPT = """
+You are a startup idea extraction engine.
 
+Extract the user's startup idea from the provided user input.
+
+Rules:
+- Return ONLY the startup idea.
+- Do not explain anything.
+- Do not add features, customers, markets, technologies, or business details.
+- Preserve the user's original meaning.
+- Clean up grammar only when necessary.
+- If no startup idea is present, return: unknown
+
+User input may contain questions, requests, or additional context.
+Extract only the underlying startup idea.
 """
 
-WEB_SEARCH_PROMPT      = """
+STARTUP_TYPE_PROMPT      = """
+You are a startup classification engine.
+
+Classify the startup idea into ONE concise industry or business category.
+
+Rules:
+- Return ONLY the category.
+- Do not explain your decision.
+- Use the most specific reasonable category.
+- Do not invent a category unsupported by the startup idea.
+- Prefer categories such as:
+  FoodTech, FinTech, HealthTech, EdTech, SaaS, E-commerce,
+  Marketplace, ClimateTech, Logistics, TravelTech, PropTech,
+  Cybersecurity, Developer Tools, AI/ML, Social Platform.
+- You may create another concise category when none of these fit.
+- If the startup idea is insufficient to determine a category, return: unknown
 
 """
 
