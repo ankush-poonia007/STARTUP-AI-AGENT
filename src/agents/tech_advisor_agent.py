@@ -84,10 +84,10 @@ The agent recommends technology; it does not perform market research
 or invent missing startup information.
 """
 
-    @handle_errors
     @log_execution
     @track_timing
     @retry_on_failure
+    @handle_errors
     def run(self, workflow_state: dict) -> dict:
         """
 Generate technology stack recommendations from startup context and
