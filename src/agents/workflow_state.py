@@ -6,7 +6,7 @@ workflow_state = {
     "user_input"           : "",     # raw user message
     "startup_idea"         : "",     # extracted startup_idea from user_input
     "startup_type"         : "",     # what type of startup id this 
-    "pitch_deck_text"      : [],     # extracted PDF text, "" if none
+    "pitch_deck_text"      : [],     # extracted PDF text, [] if none
 
     # ── LLM AS JUDGE  ───────────────────────────────────
     "judge_feedback": {
