@@ -2,12 +2,18 @@
 File        : agents/tech_advisor_agent.py
 Triggered By: full_analysis, partial_idea
 Tools       : groq_tool.py
-Input       : workflow_state["market_data"]
+Input       : workflow_state["startup_idea"]
+             + workflow_state["startup_type"]
+             + workflow_state["market_data"]
 Output      : workflow_state["tech_recommendations"]
+
+Purpose:
+    Recommend a practical technology stack using the normalized startup
+    context and supporting market evidence.
 
 Output Format:
     workflow_state["tech_recommendations"] → str
-        Structured plain text with sections:
+        Structured plain text:
             ## Frontend
             ## Backend
             ## Database
@@ -15,13 +21,19 @@ Output Format:
             ## Infrastructure
             ## Rationale
 
-        Each choice justified against startup type + market context.
-
 Responsibilities:
-- Recommend tech stack aligned to startup type
-- Justify each choice against market context
-- Prioritize speed to market over complexity
-- Suggest lean architecture for small team
+    - Align technology choices with startup idea and startup type.
+    - Use market data as supporting evidence.
+    - Prioritize speed to market and maintainability.
+    - Prefer lean architecture for an early-stage startup.
+    - Explain requirements, fit, and trade-offs for major choices.
+    - Avoid unnecessary architectural complexity.
+    - Preserve supplied source URLs for supported claims.
+
+Important:
+    Do not invent missing business, scale, compliance, or team-size
+    information. Recommend only technologies that solve actual or
+    reasonably inferred requirements.
 """
 
 from src.core.decorators import (
@@ -37,101 +49,127 @@ from src.tools.groq_tool import text_call
 
 class TechAdvisorAgent:
     """
-    Tech Advisor Agent responsible for recommending a suitable
-    technology stack for the startup based on available market data.
+Technology stack recommendation agent for early-stage startup analysis.
 
-    This agent operates as part of the multi-agent workflow and uses
-    market_data to understand the startup's product requirements,
-    market expectations, technology needs, and relevant ecosystem trends.
+The agent combines normalized startup context with market evidence to
+produce a realistic, maintainable technology stack.
 
-    The agent focuses on:
-        - Recommending a technology stack aligned with the startup type.
-        - Justifying technology choices against the available evidence.
-        - Prioritizing speed to market over unnecessary complexity.
-        - Suggesting a lean architecture suitable for a small team.
+Input State:
+    workflow_state["startup_idea"]:
+        Normalized startup concept prepared upstream.
 
-    Input State:
-        workflow_state["market_data"]:
-            Market research and evidence produced by upstream agents.
+    workflow_state["startup_type"]:
+        Startup category inferred from the normalized startup idea.
 
-    Output State:
-        workflow_state["tech_recommendations"]:
-            Structured plain-text technology stack recommendation.
+    workflow_state["market_data"]:
+        Market and technology evidence produced by upstream agents.
 
-        workflow_state["pipeline_status"]["TechAdvisorAgent"]:
-            Updated to "success" when the agent completes successfully.
+Output State:
+    workflow_state["tech_recommendations"]:
+        Structured technology stack recommendation.
 
-    Notes:
-        Market data is used as the evidence source for technology
-        recommendations. Source URLs provided in the market data are
-        preserved when making externally supported claims.
-    """
+    workflow_state["pipeline_status"]["TechAdvisorAgent"]:
+        Set to "success" after successful execution.
 
-    @handle_errors
+Responsibilities:
+    - Translate startup requirements into technology requirements.
+    - Recommend relevant frontend, backend, database, server, and
+      infrastructure choices.
+    - Justify major choices against startup context and evidence.
+    - Prefer simple architecture over premature complexity.
+    - Consider team size only when supplied in the workflow state.
+    - Distinguish sourced facts from technical recommendations.
+
+The agent recommends technology; it does not perform market research
+or invent missing startup information.
+"""
+
     @log_execution
     @track_timing
     @retry_on_failure
+    @handle_errors
     def run(self, workflow_state: dict) -> dict:
         """
-        Generate technology stack recommendations from market data.
+Generate technology stack recommendations from startup context and
+market evidence.
 
-        Parameters
-        ----------
-        workflow_state : dict
-            Shared state passed between agents in the multi-agent workflow.
-            The state must contain "market_data" and "pipeline_status".
+Parameters
+----------
+workflow_state : dict
+    Shared workflow state containing "startup_idea", "startup_type",
+    "market_data", and "pipeline_status".
 
-        Returns
-        -------
-        dict
-            Updated workflow state containing the generated technology
-            recommendations under "tech_recommendations" and the updated
-            TechAdvisorAgent execution status.
+Returns
+-------
+dict
+    Updated workflow state containing "tech_recommendations" and the
+    successful TechAdvisorAgent pipeline status.
 
-        Notes
-        -----
-        The recommendation is based on the startup's actual requirements
-        and the technology ecosystem represented by the available market
-        evidence.
+Processing Stages
+-----------------
+1. Read startup idea, startup type, and market data.
+2. Load the technology-advisor system instructions.
+3. Build the evidence-grounded user prompt.
+4. Prepare the system/user message sequence.
+5. Generate the recommendation through Groq.
+6. Store the recommendation in workflow_state.
+7. Mark TechAdvisorAgent as successful.
+8. Return the updated workflow state.
 
-        Sourced facts are distinguished from technical recommendations,
-        and source URLs provided in the market data are not invented,
-        modified, or guessed.
-        """
+Recommendation Rules
+--------------------
+Startup information is the primary product context. Market data is
+supporting evidence. Recommendations should be realistic for the
+startup's current stage, avoid premature infrastructure complexity,
+and clearly distinguish evidence from technical inference.
+"""
 
         # ----------------------------------------------------
-        # 1. Read market research data
+        # 1. Read startup context and market evidence
         # ----------------------------------------------------
-
+        startup_idea = workflow_state["startup_idea"]
+        startup_type = workflow_state["startup_type"]
+        
         market_data = workflow_state["market_data"]
 
         # ----------------------------------------------------
-        # 2. Prepare system prompt
+        # 2. Load technology-advisor instructions
         # ----------------------------------------------------
 
         system_prompt = TECH_ADVISOR_PROMPT
 
         # ----------------------------------------------------
-        # 3. Build user prompt
+        # 3. Build evidence-grounded user prompt
         # ----------------------------------------------------
         
         user_prompt = f"""
-Analyze the following startup market data and recommend the technology stack according to your system instructions.
+Analyze the following startup information and market data and recommend the technology stack according to your system instructions.
+
+
+### STARTUP INFORMATION
+
+Startup Idea:
+{startup_idea}
+
+Startup Type:
+{startup_type}
 
 ### MARKET DATA
 
 {market_data}
 
-Use the supplied market evidence to determine the startup's product requirements, current market expectations, technology needs, and relevant ecosystem trends.
 
-Use the source URLs provided in `MARKET DATA` when making externally supported claims. Do not invent, modify, or guess URLs.
+Use the supplied startup information and market evidence to determine the startup's product requirements, current market expectations, technology needs, and relevant ecosystem trends.
+
+Use the source URLs provided in 'MARKET DATA` when making externally supported claims. Do not invent, modify, or guess URLs.
 
 Base technology recommendations on the startup's actual requirements and the current technology ecosystem represented by the available evidence. Clearly distinguish sourced facts from your own technical recommendations.
 
+Do not invent or modify source URLs.
         """
 
         # ----------------------------------------------------
-        # 4. Prepare LLM messages
+        # 4. Prepare LLM message sequence
         # ----------------------------------------------------
 
         messages = [
@@ -150,7 +188,7 @@ Base technology recommendations on the startup's actual requirements and the cur
         # ----------------------------------------------------
 
         tech_stack_response = text_call(
-            prompt=messages
+            messages=messages,
         )
 
         # ----------------------------------------------------
@@ -162,7 +200,7 @@ Base technology recommendations on the startup's actual requirements and the cur
         )
 
         # ----------------------------------------------------
-        # 7. Update pipeline status
+        # 7. Mark agent execution as successful
         # ----------------------------------------------------
 
         workflow_state["pipeline_status"]["TechAdvisorAgent"] = (
@@ -183,9 +221,10 @@ Base technology recommendations on the startup's actual requirements and the cur
 if __name__ == "__main__":
 
     print("=" * 50)
+    print("=" * 50)
 
     # ----------------------------------------------------
-    # 1. Import the MOCK_STATE_FULL
+    # 1. Load full-workflow test state
     # ----------------------------------------------------
 
     from tests.mock_workflow_state import MOCK_STATE_FULL
@@ -197,7 +236,7 @@ if __name__ == "__main__":
     agent = TechAdvisorAgent()
 
     # ----------------------------------------------------
-    # 3. Run technology recommendation pipeline
+    # 3. Run technology recommendation stage
     # ----------------------------------------------------
 
     workflow_state = agent.run(
@@ -205,9 +244,12 @@ if __name__ == "__main__":
     )
 
     # ----------------------------------------------------
-    # 4. Print generated recommendations
+    # 4. Display generated recommendations
     # ----------------------------------------------------
 
     print(
         workflow_state["tech_recommendations"]
     )
+    
+    print("=" * 50)
+    print("=" * 50)
