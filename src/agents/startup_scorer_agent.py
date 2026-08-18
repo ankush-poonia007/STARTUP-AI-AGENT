@@ -187,6 +187,69 @@ class StartupScorerAgent:
         trusting the LLM to perform the arithmetic.
     """
 
+    STARTUP_SCORE_RESPONSE_FORMAT = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "startup_score",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {
+                        "type": "string"
+                    },
+                    "breakdown": {
+                        "type": "object",
+                        "properties": {
+                            "market": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 100
+                            },
+                            "mvp": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 100
+                            },
+                            "tech": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 100
+                            },
+                            "risk": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 100
+                            }
+                        },
+                        "required": [
+                            "market",
+                            "mvp",
+                            "tech",
+                            "risk"
+                        ],
+                        "additionalProperties": False
+                    },
+                    "highest_risk_flag": {
+                        "type": "string",
+                        "enum": [
+                            "market",
+                            "mvp",
+                            "tech",
+                            "risk"
+                        ]
+                    }
+                },
+                "required": [
+                    "reasoning",
+                    "breakdown",
+                    "highest_risk_flag"
+                ],
+                "additionalProperties": False
+            }
+        }
+    }
+    
     @handle_errors
     @log_execution
     @track_timing
@@ -258,6 +321,8 @@ class StartupScorerAgent:
         # ----------------------------------------------------
         # 1. Read market and web research evidence
         # ----------------------------------------------------
+        startup_idea = workflow_state["startup_idea"]
+        startup_type = workflow_state["startup_type"]
 
         market_data = workflow_state["market_data"]
 
@@ -319,6 +384,12 @@ class StartupScorerAgent:
         user_prompt = f"""
 Evaluate the startup using the completed upstream analysis below.
 
+=== STARTUP IDEA === 
+{startup_idea}
+
+=== STARTUP TYPE ===
+{startup_type}
+
 === MARKET DATA ===
 {market_data}
 === END MARKET DATA ===
@@ -368,30 +439,24 @@ Return the required JSON assessment using only the supplied evidence.
         # ----------------------------------------------------
 
         response = text_call(
-            prompt=messages
+            messages=messages,
+            response_format=self.STARTUP_SCORE_RESPONSE_FORMAT,
+            include_reasoning=False,
+            reasoning_effort="high",
+            
         )
 
-        # ----------------------------------------------------
-        # 8. Clean accidental Markdown code fences
-        # ----------------------------------------------------
-
-        clean_response = re.sub(
-            r"^```(?:json)?\s*|\s*```$",
-            "",
-            response.strip(),
-            flags=re.IGNORECASE
-        )
 
         # ----------------------------------------------------
-        # 9. Parse LLM JSON response
+        # 8. Parse LLM JSON response
         # ----------------------------------------------------
 
         data = json.loads(
-            clean_response
+            response
         )
 
         # ----------------------------------------------------
-        # 10. Validate LLM-generated breakdown
+        # 9. Validate LLM-generated breakdown
         # ----------------------------------------------------
 
         breakdown = data["breakdown"]
@@ -427,7 +492,7 @@ Return the required JSON assessment using only the supplied evidence.
                 )
 
         # ----------------------------------------------------
-        # 11. Validate reasoning
+        # 10. Validate reasoning
         # ----------------------------------------------------
 
         reasoning = data["reasoning"]
@@ -442,7 +507,7 @@ Return the required JSON assessment using only the supplied evidence.
             )
 
         # ----------------------------------------------------
-        # 12. Determine highest-risk / weakest area
+        # 11. Determine highest-risk / weakest area
         # ----------------------------------------------------
 
         lowest_score = min(breakdown.values())
@@ -460,7 +525,7 @@ Return the required JSON assessment using only the supplied evidence.
             )
 
         # ----------------------------------------------------
-        # 13. Calculate final score deterministically
+        # 12. Calculate final score deterministically
         # ----------------------------------------------------
 
         final_score = round(
@@ -471,7 +536,7 @@ Return the required JSON assessment using only the supplied evidence.
         )
 
         # ----------------------------------------------------
-        # 14. Store startup score in workflow state
+        # 13. Store startup score in workflow state
         # ----------------------------------------------------
 
         workflow_state["startup_score"] = {
@@ -482,7 +547,7 @@ Return the required JSON assessment using only the supplied evidence.
         }
 
         # ----------------------------------------------------
-        # 15. Update pipeline status
+        # 14. Update pipeline status
         # ----------------------------------------------------
 
         workflow_state["pipeline_status"][
@@ -490,7 +555,7 @@ Return the required JSON assessment using only the supplied evidence.
         ] = "success"
 
         # ----------------------------------------------------
-        # 16. Return updated workflow state
+        # 15. Return updated workflow state
         # ----------------------------------------------------
 
         return workflow_state
