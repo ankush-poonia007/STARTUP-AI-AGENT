@@ -10,8 +10,16 @@ workflow_state = {
 
     # ── LLM AS JUDGE  ───────────────────────────────────
     "judge_feedback": {
-        "mid_pipeline": "",
-        "final"       : ""
+        "mid_pipeline": {
+            "judgment": "",
+            "reason" : "",
+            "issues" : []
+        },
+        "final": {
+            "judgment": "",
+            "reason" : "",
+            "issues" : []
+        }
     },
     
     # ── INTENT & PLAN ───────────────────────────────────
