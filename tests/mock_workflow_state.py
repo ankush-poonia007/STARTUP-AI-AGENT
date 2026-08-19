@@ -75,16 +75,27 @@ MOCK_STATE_FULL = {
     "final_report": "# Startup Analysis Report\n\n## 1. Market Overview\nIndia food delivery market at $7.5B, growing to $15B by 2028. Student segment drives 34% of orders. Tiffin demand grew 67% post-COVID among 18-24 age group.\n\n## 2. MVP Recommendations\nWhatsApp-first ordering, AI meal scheduling, subscription model. 3-month phased build for 2-person team.\n\n## 3. Tech Stack\nFastAPI backend, PostgreSQL, WhatsApp Business API, single VPS. Lean and appropriate for 0-1 stage.\n\n## 4. Risk Analysis\nHighest risk: kitchen partner reliability. Secondary: WhatsApp API dependency. Mitigations defined per feature.\n\n## 5. Startup Score\nOverall: 74/100. Market: 82, MVP: 76, Tech: 80, Risk: 58.\n\n## 6. Improvement Recommendations\n3 specific improvements: kitchen redundancy, loyalty program, exam season capacity.\n\n## 7. Pitch Deck Insights\nTarget: 18-24 Pune students. Differentiator: AI timetable-based scheduling. GTM: 5 canteen partners, 500 subscribers by Month 3.\n\n## 8. Strategic Summary\nStrong market fit with lean execution path. Primary focus: kitchen reliability and WhatsApp fallback before scaling.",
     "pdf_path": "",
     "judge_feedback": {
-        "mid_pipeline": (
-            "PASS — Intent is full_analysis and the execution plan "
-            "matches the requested startup analysis. Market, web search, "
-            "RAG, MVP, and technology outputs are relevant to the input."
-        ),
-        "final": (
-            "PASS — Final report contains all required sections. "
-            "The startup score is consistent with its breakdown, "
-            "recommendations are actionable, and the report is coherent."
-        )
+        "mid_pipeline": {
+            "judgment": "PASS",
+            "reason": (
+                "The workflow correctly identifies a full startup analysis request and "
+                "executes the expected research, RAG, MVP, and technology stages. The "
+                "market evidence, web research, RAG context, MVP scope, and lean technology "
+                "recommendations remain relevant to the AI-powered tiffin delivery concept "
+                "for college students."
+            ),
+            "issues": []
+        },
+        "final": {
+            "judgment": "PASS",
+            "reason": (
+                "The final report covers the required analysis areas and remains consistent "
+                "with the supplied workflow state. The market evidence, MVP direction, "
+                "technology stack, risk analysis, startup score, recommendations, and "
+                "strategic summary are coherent with the startup idea and supporting inputs."
+            ),
+            "issues": []
+        }
     },
     "pipeline_status": {
         "IntentRouterAgent": "success",
@@ -149,8 +160,16 @@ MOCK_STATE_EMPTY = {
     "final_report": "",
     "pdf_path": "",
     "judge_feedback": {
-        "mid_pipeline": "",
-        "final": ""
+        "mid_pipeline": {
+            "judgment": "",
+            "reason" : "",
+            "issues" : []
+        },
+        "final": {
+            "judgment": "",
+            "reason" : "",
+            "issues" : []
+        }
     },
     "pipeline_status": {},
     "agent_retry_count": {},
