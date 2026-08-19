@@ -109,7 +109,7 @@ MOCK_STATE_FULL = {
         "RecommendationAgent": "success",
         "ReportWriterAgent": "success",
         "PDFGeneratorAgent": "pending",
-        "LLMJudgeAgent": "pending"
+        "LLMJudgeAgent": {}
     },
     "agent_retry_count": {
         "MarketResearchAgent": 0,
