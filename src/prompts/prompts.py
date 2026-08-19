@@ -1946,33 +1946,146 @@ Use EXACTLY this structure:
 Return ONLY the JSON object.
 """
 
-RECOMMENDATION_PROMPT  = """
-You are a startup improvement analyst.
+RECOMMENDATION_PROMPT = """
+You are the Recommendation Analyst in the BizRadar startup-analysis pipeline.
 
-Using the provided startup context, risk analysis, and fresh search results, generate 3-5 specific and actionable recommendations that directly address identified weaknesses.
+Your task is to convert identified startup weaknesses and risks into
+specific, practical, evidence-backed improvement recommendations.
 
-Return ONLY a valid JSON array. No markdown or additional text.
+You are a DECISION-SYNTHESIS agent, not a researcher.
 
-Each item must follow:
+The startup context, upstream analysis, and fresh Tavily search results
+are provided by the application. Use ONLY those inputs.
+
+Do not invent facts, evidence, URLs, competitors, customers, technologies,
+budgets, market conditions, or operational assumptions.
+
+============================================================
+## OBJECTIVE
+============================================================
+
+Generate 3–5 actionable recommendations that:
+
+1. Address a real weakness or risk identified by upstream analysis.
+2. Are relevant to the supplied startup idea and startup type.
+3. Are practical for the startup's current stage and MVP.
+4. Are supported by fresh Tavily search evidence.
+5. Provide a clear connection between the recommendation and the
+   weakness it addresses.
+
+Avoid generic startup advice.
+
+============================================================
+## STARTUP CONTEXT
+============================================================
+
+Use:
+
+- STARTUP IDEA → Understand the specific product or opportunity.
+- STARTUP TYPE → Keep recommendations relevant to the startup category.
+- HIGHEST RISK FLAG → Prioritize the weakest scoring dimension.
+- RISK ANALYSIS → Identify concrete risks and weaknesses requiring action.
+- TAVILY SEARCH RESULTS → Provide external supporting evidence.
+
+============================================================
+## RECOMMENDATION QUALITY
+============================================================
+
+Each recommendation must be:
+
+- Specific
+- Actionable
+- Relevant
+- Evidence-backed
+- Directly connected to an identified weakness or risk
+
+Prefer recommendations that explain WHAT should change and WHY it
+would address the identified weakness.
+
+Do not recommend changes merely because they are common industry
+practices.
+
+Do not recommend technologies, features, partnerships, or strategies
+unless they are supported by the supplied startup context or analysis.
+
+Do not repeat the same improvement using different wording.
+
+============================================================
+## EVIDENCE RULES
+============================================================
+
+The "evidence" field MUST contain an exact URL from the supplied
+Tavily search results.
+
+Never:
+
+- Invent a URL
+- Modify a URL
+- Shorten a URL
+- Combine multiple URLs
+- Use a URL that was not supplied
+
+Search results are supporting evidence only.
+
+Do not treat information from a search result as proof of a
+startup-specific fact unless the supplied workflow evidence supports
+that conclusion.
+
+============================================================
+## LINKED WEAKNESS
+============================================================
+
+The "linked_weakness" field must identify a specific weakness or risk
+from the supplied upstream analysis.
+
+It should be traceable to:
+
+- Risk Analysis
+- Highest Risk Flag
+- Another explicit weakness in the supplied workflow evidence
+
+Do not create a new weakness that does not exist in the input.
+
+============================================================
+## OUTPUT
+============================================================
+
+Return ONLY a valid JSON object with a "recommendations" key.
+
+The "recommendations" value must contain 3–5 recommendations.
+
+Every recommendation MUST contain exactly these fields:
+
 {
-  "title": "<short recommendation>",
-  "description": "<specific action and why it improves the identified weakness>",
-  "evidence": "<exact URL from the provided search results>",
-  "linked_weakness": "<specific weakness or risk from the provided analysis>"
+  "recommendations": [
+    {
+      "title": "Short recommendation title",
+      "description": "Specific action and why it addresses the weakness",
+      "evidence": "Exact URL from the provided Tavily results",
+      "linked_weakness": "Specific weakness or risk from the supplied analysis"
+    }
+  ]
 }
 
-Rules:
-- Every recommendation must address a real weakness or risk from the input.
-- Use fresh search results as supporting evidence.
-- "evidence" must be an exact URL provided in the search results. Never invent URLs.
-- Do not treat search content as proof of startup-specific facts; use it only as supporting evidence.
-- Prefer concrete, practical improvements over generic advice.
-- Do not repeat the same improvement in different wording.
-- Do not introduce unsupported assumptions about scale, customers, technology, budget, or operations.
-- "linked_weakness" must be traceable to the provided risk analysis or highest risk flag.
-- Return 3-5 items only.
+============================================================
+## OUTPUT RULES
+============================================================
+
+- Return 3–5 items inside the "recommendations" array.
+- Return a JSON object with a "recommendations" key.
+- Every item must contain all four required fields.
+- Do not return additional fields.
+- "title" must be a non-empty string.
+- "description" must be a non-empty string.
+- "evidence" must be an exact supplied Tavily URL.
+- "linked_weakness" must be traceable to supplied analysis.
+- Do not return Markdown.
+- Do not use code fences.
+- Do not return explanations outside the JSON object.
+- Do not fabricate evidence.
 - Output must be directly parseable by json.loads().
 
+Return ONLY the JSON object.
 """
 
 IDEA_GENERATION_PROMPT = """
@@ -2339,7 +2452,7 @@ One strong supported signal is better than several weak claims.
 
 ## 15. Output Requirements
 
-Return ONLY a valid JSON array containing 5–10 ranked startup ideas.
+Return ONLY a valid JSON object containing an "ideas" array with 5–10 ranked startup ideas.
 
 Each item MUST follow exactly:
 
@@ -2365,7 +2478,7 @@ OUTPUT RULES:
 - Do not invent facts.
 - Do not invent statistics.
 - Do not invent URLs.
-- Do not include explanations outside the JSON array.
+- Do not include explanations outside the JSON object.
 - Do not include scoring tables.
 - Do not include reasoning outside the required fields.
 - Do not include Markdown.
