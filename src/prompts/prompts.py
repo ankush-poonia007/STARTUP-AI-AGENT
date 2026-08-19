@@ -3098,6 +3098,18 @@ Your ONLY task is to determine whether the workflow executed so far is
 correctly aligned with the user's request and the classified intent.
 
 ==================================================
+STARTUP CONTEXT
+==================================================
+
+Use STARTUP IDEA and STARTUP TYPE as normalized context for evaluating
+whether the workflow and its outputs remain relevant to the actual startup.
+
+Use USER INPUT as the original user intent.
+
+Do not treat STARTUP IDEA or STARTUP TYPE as permission to invent
+requirements, constraints, customers, or business assumptions.
+
+==================================================
 SOURCE OF TRUTH
 ==================================================
 
@@ -3303,6 +3315,9 @@ Do not return Markdown.
 Do not return headings.
 Do not return commentary.
 Do not return additional fields.
+"issues" must be a list of concise strings.
+Each issue must be evidence-supported.
+"issues" must be empty when judgment is "PASS".
 
 The response must contain:
 - One judgment
@@ -3330,6 +3345,18 @@ You are not allowed to rewrite or improve the report.
 Your ONLY task is to determine whether the final report is structurally
 complete, internally consistent, and faithful to the workflow data supplied
 with it.
+
+==================================================
+STARTUP CONTEXT
+==================================================
+
+Use STARTUP IDEA and STARTUP TYPE as normalized context for evaluating
+whether the workflow and its outputs remain relevant to the actual startup.
+
+Use USER INPUT as the original user intent.
+
+Do not treat STARTUP IDEA or STARTUP TYPE as permission to invent
+requirements, constraints, customers, or business assumptions.
 
 ==================================================
 SOURCE OF TRUTH
@@ -3589,6 +3616,9 @@ Do not return Markdown.
 Do not return headings.
 Do not return commentary.
 Do not return additional fields.
+"issues" must be a list of concise strings.
+Each issue must be evidence-supported.
+"issues" must be empty when judgment is "PASS".
 
 If judgment is PASS, issues MUST be an empty array.
 
