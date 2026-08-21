@@ -283,22 +283,22 @@ class OrchestratorAgent:
         # execution plans can reference.
 
         AGENT_REGISTRY: dict = {
-            "IntentRouterAgent"   : Intent_Router_Agent(),
-            "MarketResearchAgent" : MarketResearchAgent(),
-            "WebSearchAgent"      : WebSearchAgent(),
-            "RAGAgent"            : RAGAgent(),
-            "LLMJudgeAgent"       : LLMJudgeAgent(),
-            "PDFGeneratorAgent"   : PDFGeneratorAgent(),
-            "ReportWriterAgent"   : ReportWriterAgent(),
-            "GeneralChatAgent"    : GeneralChatAgent(),
-            "AdvancementAgent"    : AdvancementAgent(),
-            "NurturingAgent"      : NurturingAgent(),
-            "IdeaGenerationAgent" : IdeaGenerationAgent(),
-            "RecommendationAgent" : RecommendationAgent(),
-            "RiskAnalystAgent"    : RiskAnalystAgent(),
-            "TechAdvisorAgent"    : TechAdvisorAgent(),
-            "MVPAdvisorAgent"     : MVPAdvisorAgent(),
-            "StartupScorerAgent"  : StartupScorerAgent()
+            "IntentRouterAgent": Intent_Router_Agent(),
+            "MarketResearchAgent": MarketResearchAgent(),
+            "WebSearchAgent": WebSearchAgent(),
+            "RAGAgent": RAGAgent(),
+            "LLMJudgeAgent": LLMJudgeAgent(),
+            "PDFGeneratorAgent": PDFGeneratorAgent(),
+            "ReportWriterAgent": ReportWriterAgent(),
+            "GeneralChatAgent": GeneralChatAgent(),
+            "AdvancementAgent": AdvancementAgent(),
+            "NurturingAgent": NurturingAgent(),
+            "IdeaGenerationAgent": IdeaGenerationAgent(),
+            "RecommendationAgent": RecommendationAgent(),
+            "RiskAnalystAgent": RiskAnalystAgent(),
+            "TechAdvisorAgent": TechAdvisorAgent(),
+            "MVPAdvisorAgent": MVPAdvisorAgent(),
+            "StartupScorerAgent": StartupScorerAgent()
         }
 
         # ----------------------------------------------------
@@ -341,7 +341,7 @@ class OrchestratorAgent:
                     futures = {}
 
                     for agent in batch["agents"]:
-                        
+
                         # ------------------------------------------------
                         # PDFGeneratorAgent is never executed from a
                         # normal execution-plan batch.
@@ -351,7 +351,7 @@ class OrchestratorAgent:
                         # ------------------------------------------------
                         if agent == "PDFGeneratorAgent":
                             continue
-                        
+
                         agent_instance = AGENT_REGISTRY[agent]
 
                         future = executor.submit(
@@ -407,7 +407,7 @@ class OrchestratorAgent:
             else:
 
                 for agent in batch["agents"]:
-                    
+
                     # ------------------------------------------------
                     # PDFGeneratorAgent is never executed from a
                     # normal execution-plan batch.
@@ -417,7 +417,7 @@ class OrchestratorAgent:
                     # ------------------------------------------------
                     if agent == "PDFGeneratorAgent":
                         continue
-                    
+
                     try:
 
                         # Resolve the requested agent from the registry.
