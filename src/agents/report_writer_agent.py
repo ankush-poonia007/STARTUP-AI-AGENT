@@ -1,100 +1,60 @@
 """
-File        : agents/report_writer_agent.py
-Triggered By: full_analysis, partial_idea
-Tools       : gemini_tool.py
+Report Writer Agent
 
-Input:
-    Report-relevant outputs from the shared workflow_state.
+Responsibility:
+    Assemble the final BizRadar startup analysis report from existing
+    workflow outputs.
 
-    The agent collects the information required to build the final
-    startup analysis report, including:
+This agent does NOT perform:
+    - Market research
+    - RAG retrieval
+    - Risk analysis
+    - MVP generation
+    - New strategic reasoning
+    - External research
 
-        - user_input
-        - pitch_deck_text
-        - market_data
-        - web_search_results
-        - rag_context
-        - mvp_suggestions
-        - tech_recommendations
-        - risk_analysis
-        - startup_score
+It only transforms supplied workflow data into a structured Markdown report.
+
+Startup Context:
+    startup_idea and startup_type are used only for report framing and
+    startup identity.
+
+    They must NOT be used to generate new:
+        - facts
+        - analysis
         - recommendations
-        - nurtured_idea
+        - strategies
+        - risks
+        - features
+        - business models
+        - technical decisions
+        - conclusions
 
-Output:
-    workflow_state["final_report"] → str
-
-    A complete Markdown startup analysis report containing:
-
-        # Startup Analysis Report
-
-        ## 1. Market Overview
-        ## 2. MVP Recommendations
-        ## 3. Tech Stack
-        ## 4. Risk Analysis
-        ## 5. Startup Score
-        ## 6. Improvement Recommendations
-        ## 7. Pitch Deck Insights
-        ## 8. Strategic Summary
-
-Responsibilities:
-- Collect report-relevant outputs from previous agents.
-- Normalize dictionaries and lists before prompt construction.
-- Preserve meaningful technical details from previous agents.
-- Preserve citations and URLs exactly as provided.
-- Keep each workflow source clearly separated in the prompt.
-- Prevent pipeline metadata from being treated as startup information.
-- Provide Gemini with the complete workflow evidence.
-- Assemble the final startup analysis report through Gemini.
-
-Important:
-    This agent is a report assembly agent.
-
-    It does not perform new market research, independently evaluate
-    the startup, or create unsupported facts.
-
-    The previous agent outputs supplied through workflow_state are
-    treated as the source of truth for the final report.
+The workflow outputs remain the authoritative source of report content.
 """
 
+import json
+
 from src.core.decorators import (
+    handle_errors,
     log_execution,
     track_timing,
-    retry_on_failure,
-    handle_errors
+    retry_on_failure
 )
 
 from src.prompts.prompts import REPORT_WRITER_PROMPT
 from src.tools.gemini_tool import text_call
 
-import json
 
-
-def to_prompt_string(value) -> str:
+def to_prompt_string(value):
     """
-    Convert workflow_state data into a clean string representation
-    suitable for inclusion in the Gemini prompt.
+    Convert workflow data into readable prompt text.
 
-    Parameters
-    ----------
-    value :
-        Any value from workflow_state that needs to be passed to
-        the report-writing prompt.
+    Dictionaries and lists are converted into formatted JSON.
+    Other values are converted using str().
 
-    Returns
-    -------
-    str
-        A readable string representation of the supplied value.
-
-        Dictionaries and lists are converted into formatted JSON
-        so that nested workflow structures remain readable.
-
-        Strings and other values are converted using str().
-
-    Notes
-    -----
-    This helper only prepares workflow data for prompt construction.
-    It does not modify the original workflow_state values.
+    This helper only prepares data for the Gemini prompt.
+    It does not modify workflow_state.
     """
 
     if isinstance(value, (dict, list)):
@@ -110,115 +70,50 @@ def to_prompt_string(value) -> str:
 
 class ReportWriterAgent:
     """
-    Report Writer Agent responsible for assembling the final startup
-    analysis report from the outputs produced by previous agents.
+    Assemble the final startup analysis report.
 
-    This agent operates near the end of the multi-agent workflow after
-    the required startup analysis components have been generated.
-
-    The agent does not perform independent research or create new
-    startup analysis. Instead, it organizes the information already
-    present in workflow_state and provides that information to Gemini
-    using a clearly structured prompt.
-
-    The agent combines:
-        - Original user input
-        - Pitch-deck information
-        - Market research
-        - Web search evidence
-        - RAG context
-        - MVP recommendations
-        - Technology recommendations
-        - Risk analysis
-        - Startup score
-        - Improvement recommendations
-        - Nurtured startup idea
+    The agent receives outputs generated by previous workflow stages
+    and converts them into one coherent Markdown report.
 
     Input State:
-        workflow_state:
-            Shared state containing outputs generated by previous
-            agents in the multi-agent pipeline.
+        workflow_state["user_input"]
+            Original user request.
+
+        workflow_state["startup_idea"]
+            Normalized startup idea used only to identify and frame
+            the startup being reported.
+
+        workflow_state["startup_type"]
+            Startup category used only as supporting report context.
+
+        Other workflow fields:
+            Existing outputs from market research, RAG, MVP,
+            technology, risk, scoring, nurturing, and advancement agents.
 
     Output State:
-        workflow_state["final_report"]:
-            Final Markdown startup analysis report generated by Gemini.
+        workflow_state["final_report"]
+            Final Markdown startup analysis report.
 
-        workflow_state["pipeline_status"]["ReportWriterAgent"]:
-            Updated to "success" when the report is generated successfully.
+        workflow_state["pipeline_status"]["ReportWriterAgent"]
+            Execution status.
 
     Core Responsibility:
-        Convert multiple heterogeneous workflow outputs into one
-        coherent final report without introducing unsupported
-        information.
-
-    Important:
-        The report writer should preserve the evidence supplied by
-        previous agents, including meaningful technical details,
-        citations, and URLs.
-
-        Pipeline metadata such as execution logs, retry counters,
-        and internal status information is not treated as startup
-        analysis data.
+        Assemble existing workflow information without creating
+        new substantive information.
     """
 
+    @handle_errors
     @log_execution
     @track_timing
     @retry_on_failure
-    @handle_errors
     def run(self, workflow_state: dict) -> dict:
         """
-        Assemble the final startup analysis report from workflow_state.
+        Generate the final Markdown startup analysis report.
 
-        Parameters
-        ----------
-        workflow_state : dict
-            Shared workflow state containing outputs from the previous
-            agents participating in the startup analysis pipeline.
+        Startup context is included only for report framing.
 
-        Returns
-        -------
-        dict
-            Updated workflow_state containing the generated final
-            report under "final_report" and the updated
-            ReportWriterAgent pipeline status.
-
-        Processing Flow
-        ---------------
-        STEP 1:
-            Collect only the workflow fields relevant to the final
-            startup report.
-
-        STEP 2:
-            Normalize lists and dictionaries into readable strings
-            using to_prompt_string().
-
-        STEP 3:
-            Build a clearly separated user prompt containing all
-            report-relevant workflow information.
-
-        STEP 4:
-            Combine REPORT_WRITER_PROMPT with the workflow data.
-
-        STEP 5:
-            Send the complete report-writing prompt to Gemini.
-
-        STEP 6:
-            Store the generated Markdown report in
-            workflow_state["final_report"].
-
-        STEP 7:
-            Mark ReportWriterAgent as successfully completed.
-
-        STEP 8:
-            Return the updated workflow_state.
-
-        Notes
-        -----
-        Gemini receives the workflow data as the source of truth.
-
-        The report-writing prompt explicitly prevents the model from
-        performing additional research or inventing facts that are
-        not present in the supplied workflow data.
+        startup_idea and startup_type must never become independent
+        sources for generating new analysis or recommendations.
         """
 
         # ==============================================================
@@ -228,6 +123,23 @@ class ReportWriterAgent:
         report_data = {
             "user_input": workflow_state.get(
                 "user_input",
+                ""
+            ),
+
+            # ----------------------------------------------------------
+            # Startup identity/context
+            # ----------------------------------------------------------
+            #
+            # These fields identify what startup the report describes.
+            # They are NOT independent sources of analytical content.
+            #
+            "startup_idea": workflow_state.get(
+                "startup_idea",
+                ""
+            ),
+
+            "startup_type": workflow_state.get(
+                "startup_type",
                 ""
             ),
 
@@ -281,10 +193,14 @@ class ReportWriterAgent:
                 ""
             ),
 
+            "advancement_plan": workflow_state.get(
+                "advancement_plan",
+                ""
+            ),
         }
 
         # ==============================================================
-        # STEP 2 — NORMALIZE ALL WORKFLOW DATA
+        # STEP 2 — NORMALIZE WORKFLOW DATA
         # ==============================================================
 
         report_data = {
@@ -293,92 +209,152 @@ class ReportWriterAgent:
         }
 
         # ==============================================================
-        # STEP 3 — BUILD STRUCTURED USER PROMPT
+        # STEP 3 — BUILD STRUCTURED REPORT-WRITING PROMPT
         # ==============================================================
 
         user_prompt = f"""
-Generate the final BizRadar startup analysis report using ONLY the workflow
-data provided below.
+Generate the final BizRadar startup analysis report using ONLY the
+workflow data provided below.
 
-The supplied workflow data is the complete source of truth.
+The supplied workflow outputs are the complete source of truth.
 
 Do not use external knowledge.
 Do not perform additional research.
-Do not invent facts, statistics, competitors, technologies, recommendations,
-market claims, scores, risks, or conclusions.
+Do not invent facts, statistics, competitors, technologies,
+recommendations, market claims, scores, risks, or conclusions.
 
-You may reorganize, combine overlapping information, improve readability,
-and create useful Markdown formatting and subsections.
+==================================================
+STARTUP CONTEXT
+==================================================
 
-==============================
-USER INPUT
-==============================
+STARTUP IDEA:
+{report_data["startup_idea"]}
+
+STARTUP TYPE:
+{report_data["startup_type"]}
+
+USER INPUT:
 {report_data["user_input"]}
 
-==============================
+IMPORTANT STARTUP-CONTEXT RULE:
+
+STARTUP IDEA and STARTUP TYPE are provided ONLY to identify and
+frame the startup being reported.
+
+They are NOT instructions to generate, improve, reinterpret,
+evaluate, expand, redesign, or strategize about the startup.
+
+Do NOT derive new substantive information from STARTUP IDEA or
+STARTUP TYPE alone.
+
+Do NOT create new:
+
+- Facts
+- Market claims
+- Customer claims
+- Recommendations
+- Strategies
+- Risks
+- Features
+- Business models
+- Technical decisions
+- Conclusions
+- Metrics
+- Assumptions
+
+from STARTUP IDEA or STARTUP TYPE.
+
+If information is absent from the workflow outputs below,
+do not infer it from STARTUP IDEA or STARTUP TYPE.
+
+Instead, preserve the relevant report section and state:
+
+"Not provided in the available workflow data."
+
+STARTUP IDEA and STARTUP TYPE exist only to prevent the report
+from being framed around the wrong startup.
+
+==================================================
 PITCH DECK TEXT
-==============================
+==================================================
 {report_data["pitch_deck_text"]}
 
-==============================
+==================================================
 MARKET DATA
-==============================
+==================================================
 {report_data["market_data"]}
 
-==============================
+==================================================
 WEB SEARCH RESULTS
-==============================
+==================================================
 {report_data["web_search_results"]}
 
-==============================
+==================================================
 RAG CONTEXT
-==============================
-{report_data["rag_context"] if report_data["rag_context"] != "[]" else "Not Provided"}
+==================================================
+{
+    report_data["rag_context"]
+    if report_data["rag_context"] != "[]"
+    else "Not Provided"
+}
 
-==============================
+==================================================
 MVP SUGGESTIONS
-==============================
+==================================================
 {report_data["mvp_suggestions"]}
 
-==============================
+==================================================
 TECH RECOMMENDATIONS
-==============================
+==================================================
 {report_data["tech_recommendations"]}
 
-==============================
+==================================================
 RISK ANALYSIS
-==============================
+==================================================
 {report_data["risk_analysis"]}
 
-==============================
+==================================================
 STARTUP SCORE
-==============================
+==================================================
 {report_data["startup_score"]}
 
-==============================
+==================================================
 IMPROVEMENT RECOMMENDATIONS
-==============================
+==================================================
 {report_data["recommendations"]}
 
-==============================
+==================================================
 NURTURED IDEA
-==============================
+==================================================
 {report_data["nurtured_idea"]}
 
-==============================
+==================================================
+ADVANCEMENT PLAN
+==================================================
+{report_data["advancement_plan"]}
+
+==================================================
 END WORKFLOW DATA
-==============================
+==================================================
 
-Assemble the supplied information into the required eight-section Markdown
-startup analysis report.
+Assemble the supplied information into the required eight-section
+Markdown startup analysis report.
 
-Preserve all meaningful information and citations.
+Preserve meaningful information and supplied citations.
 
 Do not add facts, assumptions, recommendations, or external knowledge.
+
+Remember:
+
+STARTUP IDEA = report identity/context only.
+
+STARTUP TYPE = report category/context only.
+
+ALL substantive report content must come from the supplied workflow outputs.
 """
 
         # ==============================================================
-        # STEP 4 — COMBINE SYSTEM PROMPT + USER DATA
+        # STEP 4 — COMBINE SYSTEM PROMPT + WORKFLOW DATA
         # ==============================================================
 
         final_prompt = (
@@ -388,10 +364,10 @@ Do not add facts, assumptions, recommendations, or external knowledge.
         )
 
         # ==============================================================
-        # STEP 5 — CALL GEMINI
+        # STEP 5 — GENERATE FINAL REPORT USING GEMINI
         # ==============================================================
 
-        gemini_response = text_call(
+        final_report = text_call(
             user_prompt=final_prompt
         )
 
@@ -400,19 +376,21 @@ Do not add facts, assumptions, recommendations, or external knowledge.
         # ==============================================================
 
         workflow_state["final_report"] = (
-            gemini_response
+            final_report
         )
 
         # ==============================================================
         # STEP 7 — UPDATE PIPELINE STATUS
         # ==============================================================
 
-        workflow_state["pipeline_status"]["ReportWriterAgent"] = (
-            "success"
-        )
+        workflow_state[
+            "pipeline_status"
+        ][
+            "ReportWriterAgent"
+        ] = "success"
 
         # ==============================================================
-        # STEP 8 — RETURN WORKFLOW STATE
+        # STEP 8 — RETURN UPDATED WORKFLOW STATE
         # ==============================================================
 
         return workflow_state
@@ -424,260 +402,33 @@ Do not add facts, assumptions, recommendations, or external knowledge.
 
 if __name__ == "__main__":
 
-    # --------------------------------------------------------------
-    # TEST WORKFLOW STATE
-    # --------------------------------------------------------------
+    from tests.mock_workflow_state import MOCK_STATE_FULL
 
-    workflow_state = {
+    # Use the shared mock workflow state instead of maintaining
+    # a separate hardcoded report-writer test dataset.
+    workflow_state = MOCK_STATE_FULL.copy()
 
-        # ── INPUTS ──────────────────────────────────────────
-        "user_input": "AI-powered tiffin delivery for college students",
+    # Ensure the new startup context exists in the mock state.
+    workflow_state.setdefault(
+        "startup_idea",
+        ""
+    )
 
-        "pitch_deck_text": [
-            "Problem: College students need affordable, convenient, and healthy meals.",
-            "Solution: Personalized tiffin delivery based on student preferences.",
-            "Target Market: College students living away from home."
-        ],
-
-        # ── LLM AS JUDGE ────────────────────────────────────
-        "judge_feedback": {
-            "mid_pipeline": (
-                "The startup addresses a clear student food problem, "
-                "but willingness to pay requires validation."
-            ),
-            "final": (
-                "The concept has potential but needs stronger market validation "
-                "and differentiation."
-            )
-        },
-
-        # ── INTENT & PLAN ───────────────────────────────────
-        "intent": "",
-        "execution_plan": [],
-
-        # ── AGENT OUTPUTS ───────────────────────────────────
-        "market_data": """
-Personalized and subscription-based food delivery models are gaining
-attention in the food-delivery industry.
-
-Source:
-https://foodtech.folio3.com/blog/top-20-food-delivery-trends
-""",
-
-        "web_search_results": """
-Student-focused meal delivery services are exploring subscription models,
-healthier meal options, and personalized food experiences.
-
-Source:
-https://example.com/student-food-delivery-trends
-""",
-
-        "rag_context": [
-            {
-                "content": (
-                    "College students prioritize affordability, convenience, "
-                    "and predictable meal availability."
-                ),
-                "metadata": {
-                    "source": "student_food_research.pdf",
-                    "page": 4
-                }
-            },
-            {
-                "content": (
-                    "Subscription models can provide predictable recurring "
-                    "revenue for meal-delivery businesses."
-                ),
-                "metadata": {
-                    "source": "startup_business_models.pdf",
-                    "page": 12
-                }
-            }
-        ],
-
-        "mvp_suggestions": """
-1. Student registration and preference collection.
-2. Weekly meal-plan selection.
-3. Personalized meal recommendations.
-4. Tiffin subscription management.
-5. Order and delivery tracking.
-""",
-
-        "tech_recommendations": """
-Frontend: React
-Backend: FastAPI
-Database: PostgreSQL
-AI: Python-based recommendation service
-Deployment: Docker
-""",
-
-        "risk_analysis": """
-1. Customer Acquisition Risk:
-Students may be unwilling to switch from existing food-delivery services.
-
-2. Operational Risk:
-Maintaining consistent food quality and delivery times may be difficult.
-
-3. Unit Economics Risk:
-Low student budgets may make delivery costs difficult to absorb.
-
-4. Retention Risk:
-Students may cancel subscriptions if meal variety is insufficient.
-""",
-
-        "startup_score": {
-            "score": 78,
-            "reasoning": (
-                "The concept addresses a practical problem with a clearly "
-                "defined target audience, but operational feasibility and "
-                "willingness to pay require further validation."
-            ),
-            "breakdown": {
-                "market": 80,
-                "product": 82,
-                "business_model": 76,
-                "scalability": 74,
-                "feasibility": 70
-            },
-            "highest_risk_flag": "feasibility"
-        },
-
-        "recommendations": [
-            {
-                "rank": 1,
-                "recommendation": (
-                    "Validate student willingness to pay through a small "
-                    "campus pilot."
-                ),
-                "reason": "Pricing and demand are critical assumptions.",
-                "source_url": "https://example.com/student-food-delivery-trends"
-            },
-            {
-                "rank": 2,
-                "recommendation": (
-                    "Start with a limited weekly subscription plan before "
-                    "expanding into on-demand delivery."
-                ),
-                "reason": "A limited subscription model can simplify initial operations.",
-                "source_url": "https://example.com/subscription-food-models"
-            }
-        ],
-
-        "generated_ideas": [
-            {
-                "rank": 1,
-                "idea": "Personalized weekly tiffin subscriptions for college students.",
-                "market_signal": (
-                    "Growing interest in personalized food experiences."
-                ),
-                "source_url": (
-                    "https://foodtech.folio3.com/blog/top-20-food-delivery-trends"
-                )
-            },
-            {
-                "rank": 2,
-                "idea": "Budget-focused healthy meal subscriptions for students.",
-                "market_signal": (
-                    "Students prioritize affordability and convenience."
-                ),
-                "source_url": "https://example.com/student-food-delivery-trends"
-            }
-        ],
-
-        "nurtured_idea": """
-## Refined Concept
-
-A personalized tiffin subscription service designed specifically
-for college students.
-
-## Value Proposition
-
-Students receive convenient and affordable meals tailored to their
-food preferences and dietary requirements.
-
-## Missing Components Added
-
-- Student preference system
-- Subscription management
-- Meal feedback mechanism
-- Local food-provider partnerships
-
-## Suggested Business Model
-
-Weekly and monthly meal subscriptions with optional individual
-meal purchases.
-
-## Differentiators
-
-- Student-focused pricing
-- Personalized meal recommendations
-- Subscription convenience
-""",
-
-        "advancement_plan": """
-## Current Stage Assessment
-
-The concept has a clear target customer and problem but requires
-stronger validation around willingness to pay and operational feasibility.
-
-## Recommended Advancement
-
-Launch a small campus-based personalized subscription pilot.
-
-## Why This Advancement
-
-A controlled pilot can validate demand, pricing, retention, and meal
-preferences before significant expansion.
-
-## Implementation Approach
-
-Start with one college, a limited menu, and a small group of students.
-
-## Next Steps
-
-### Validate
-
-Test willingness to pay and preferred subscription pricing.
-
-### Build
-
-Create a basic ordering and subscription workflow.
-
-### Test/Measure
-
-Measure retention, satisfaction, repeat orders, and delivery issues.
-""",
-
-        "chat_response": "",
-
-        "final_report": "",
-        "pdf_path": "",
-
-        # ── PIPELINE TRACKING ────────────────────────────────
-        "pipeline_status": {},
-        "agent_retry_count": {},
-        "execution_log": [],
-        "errors": []
-    }
-
-    # --------------------------------------------------------------
-    # INITIALIZE REPORT WRITER AGENT
-    # --------------------------------------------------------------
+    workflow_state.setdefault(
+        "startup_type",
+        ""
+    )
 
     agent = ReportWriterAgent()
 
-    # --------------------------------------------------------------
-    # RUN REPORT GENERATION
-    # --------------------------------------------------------------
-
     workflow_state = agent.run(
-        workflow_state.copy()
+        workflow_state
     )
-
-    # --------------------------------------------------------------
-    # DISPLAY FINAL REPORT
-    # --------------------------------------------------------------
 
     print(
         workflow_state["final_report"]
+    )
+
+    print(
+        workflow_state["errors"]
     )
