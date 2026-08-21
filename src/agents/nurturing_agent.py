@@ -66,7 +66,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import NURTURING_PROMPT
-from src.tools.groq_tool import text_call
+from src.tools.groq_tool import groq_tool
 
 
 class NurturingAgent:
@@ -228,7 +228,7 @@ Then produce the structured startup refinement using the required format.
         # 5. Generate the refined startup concept
         # ============================================================
 
-        groq_response = text_call(
+        groq_response = groq_tool.generate_text(
             messages=messages
         )
 

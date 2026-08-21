@@ -80,7 +80,7 @@ from src.core.decorators import (
     retry_on_failure,
 )
 
-from src.tools.gemini_tool import embedding_call
+from src.tools.gemini_tool import gemini_tool
 from src.tools.reranker_tool import rerank
 
 import src.tools.chroma_tool as chroma_tool
@@ -233,7 +233,7 @@ class RAGAgent:
         # 4. Batch embed chunks → Gemini
         # ============================================================
 
-        embedding_list = embedding_call(
+        embedding_list = gemini_tool.generate_embedding(
             chunks=chunks
         )
 
@@ -258,7 +258,7 @@ class RAGAgent:
         # 7. Embed contextual query → Gemini
         # ============================================================
         
-        retrieval_query_embedding = embedding_call(
+        retrieval_query_embedding = gemini_tool.generate_embedding(
             [
                 {
                     "text": retrieval_query

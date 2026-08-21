@@ -29,7 +29,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import MVP_ADVISOR_PROMPT
-from src.tools.groq_tool import text_call
+from src.tools.groq_tool import groq_tool
 
 
 class MVPAdvisorAgent:
@@ -175,7 +175,7 @@ Identify unsupported assumptions as requiring validation.
         # 5. Generate MVP recommendation
         # ----------------------------------------------------
 
-        mvp_response = text_call(
+        mvp_response = groq_tool.generate_text(
             messages=messages
         )
 

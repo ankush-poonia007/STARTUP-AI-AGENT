@@ -85,8 +85,7 @@ from concurrent.futures import (
     as_completed
 )
 
-from tests.mock_workflow_state import MOCK_STATE_FULL
-from src.tools.tavily_tool import ask_tavily
+from src.tools.tavily_tool import tavily_tool
 
 
 class WebSearchAgent:
@@ -285,17 +284,17 @@ Do not return generic technology or business articles.
 
             futures = {
                 executor.submit(
-                    ask_tavily,
+                    tavily_tool.search,
                     competitor_prompt
                 ): "Competitor",
 
                 executor.submit(
-                    ask_tavily,
+                    tavily_tool.search,
                     funding_prompt
                 ): "Funding",
 
                 executor.submit(
-                    ask_tavily,
+                    tavily_tool.search,
                     solutions_prompt
                 ): "Solutions",
             }
@@ -362,6 +361,8 @@ URL: {item["url"]}
 
 if __name__ == "__main__":
 
+    from tests.mock_workflow_state import MOCK_STATE_FULL
+    
     # ============================================================
     # 1. Load mock workflow state
     # ============================================================

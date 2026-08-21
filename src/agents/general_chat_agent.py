@@ -71,7 +71,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import GENERAL_CHAT_PROMPT
-from src.tools.groq_tool import text_call
+from src.tools.groq_tool import groq_tool
 
 
 class GeneralChatAgent:
@@ -254,7 +254,7 @@ Answer the user's question clearly and directly.
         # 6. Generate conversational response
         # ============================================================
 
-        response = text_call(
+        response = groq_tool.generate_text(
             messages=messages
         )
 

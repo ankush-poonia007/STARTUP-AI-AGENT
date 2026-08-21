@@ -65,10 +65,9 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import STARTUP_SCORER_PROMPT
-from src.tools.groq_tool import text_call
+from src.tools.groq_tool import groq_tool
 
 import json
-import re
 
 
 class StartupScorerAgent:
@@ -438,7 +437,7 @@ Return the required JSON assessment using only the supplied evidence.
         # 7. Generate startup score assessment
         # ----------------------------------------------------
 
-        response = text_call(
+        response = groq_tool.generate_text(
             messages=messages,
             response_format=self.STARTUP_SCORE_RESPONSE_FORMAT,
             include_reasoning=False,

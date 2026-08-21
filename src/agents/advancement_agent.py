@@ -64,8 +64,8 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import ADVANCEMENT_PROMPT
-from src.tools.tavily_tool import ask_tavily
-from src.tools.groq_tool import text_call
+from src.tools.tavily_tool import tavily_tool
+from src.tools.groq_tool import groq_tool
 
 
 class AdvancementAgent:
@@ -234,7 +234,7 @@ Avoid unrelated results that only mention the same technology or audience.
         # 3. Run fresh Tavily market research
         # ============================================================
 
-        tavily_response = ask_tavily(
+        tavily_response = tavily_tool.search(
             user_query=tavily_prompt
         )
 
@@ -322,7 +322,7 @@ Return only the structured output defined by the system prompt.
         # 8. Generate advancement plan
         # ============================================================
 
-        groq_response = text_call(
+        groq_response = groq_tool.generate_text(
             messages=messages
         )
 

@@ -51,9 +51,6 @@ Failure Handling:
     are managed by the shared decorators in src/core/decorators.py.
 """
 
-from src.tools.tavily_tool import ask_tavily
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from tests.mock_workflow_state import MOCK_STATE_FULL
 from src.core.decorators import (
     handle_errors,
     track_timing,
@@ -61,6 +58,9 @@ from src.core.decorators import (
     retry_on_failure
 )
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from src.tools.tavily_tool import tavily_tool
 
 class MarketResearchAgent:
     """
@@ -238,17 +238,17 @@ Avoid unrelated industries, generic AI companies, and generic business articles.
 
             futures = {
                 executor.submit(
-                    ask_tavily,
+                    tavily_tool.search,
                     market_size_prompt
                 ): "market_size",
 
                 executor.submit(
-                    ask_tavily,
+                    tavily_tool.search,
                     demand_prompt
                 ): "demand",
 
                 executor.submit(
-                    ask_tavily,
+                    tavily_tool.search,
                     competition_prompt
                 ): "competition",
             }
@@ -303,6 +303,8 @@ URL: {item["url"]}
 
 if __name__ == "__main__":
 
+    from tests.mock_workflow_state import MOCK_STATE_FULL
+    
     # ============================================================
     # 1. Load mock workflow state
     # ============================================================

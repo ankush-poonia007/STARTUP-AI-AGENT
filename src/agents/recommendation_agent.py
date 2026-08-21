@@ -58,8 +58,8 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import RECOMMENDATION_PROMPT
-from src.tools.tavily_tool import ask_tavily
-from src.tools.groq_tool import text_call
+from src.tools.tavily_tool import tavily_tool
+from src.tools.groq_tool import groq_tool
 
 import json
 
@@ -235,7 +235,7 @@ class RecommendationAgent:
         # 3. Run fresh Tavily search
         # ============================================================
 
-        tavily_response = ask_tavily(
+        tavily_response = tavily_tool.search(
             user_query=tavily_prompt
         )
 
@@ -287,7 +287,7 @@ Generate the structured recommendation response now.
         # 7. Generate structured recommendations
         # ============================================================
 
-        groq_response = text_call(
+        groq_response = groq_tool.generate_text(
             messages=messages,
             response_format=self.RECOMMENDATION_RESPONSE_FORMAT,
             include_reasoning=False,
