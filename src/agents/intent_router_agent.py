@@ -109,11 +109,11 @@ Startup Context:
     downstream agents can work with a normalized representation of the
     startup instead of relying only on the original user wording.
 """
-
+    
+    @handle_errors
     @log_execution
     @track_timing
     @retry_on_failure
-    @handle_errors
     def run(
             self,
             workflow_state: dict
@@ -784,4 +784,12 @@ if __name__ == "__main__":
 
     print(
         workflow_state["execution_plan"]
+    )
+
+    # ============================================================
+    # 5. Display execution errors
+    # ============================================================
+
+    print(
+        workflow_state["errors"]
     )
