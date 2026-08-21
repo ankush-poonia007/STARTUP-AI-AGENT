@@ -761,7 +761,6 @@ END SOURCE DATA
     # ==============================================================
 
     @staticmethod
-    @staticmethod
     def _to_prompt_string(value) -> str:
         """
         Convert workflow data into a prompt-readable string.
