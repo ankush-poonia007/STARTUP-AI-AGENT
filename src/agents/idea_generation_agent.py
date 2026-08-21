@@ -72,8 +72,8 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import IDEA_GENERATION_PROMPT
-from src.tools.tavily_tool import ask_tavily
-from src.tools.groq_tool import text_call
+from src.tools.tavily_tool import tavily_tool
+from src.tools.groq_tool import groq_tool
 
 import json
 
@@ -314,7 +314,7 @@ Do not invent, modify, shorten, or combine URLs.
         # 3. Retrieve fresh market evidence
         # ============================================================
 
-        tavily_response = ask_tavily(
+        tavily_response = tavily_tool.search(
             user_query=tavily_prompt
         )
 
@@ -373,7 +373,7 @@ Return the required ranked JSON array only.
         # 7. Generate ranked startup opportunities
         # ============================================================
 
-        groq_response = text_call(
+        groq_response = groq_tool.generate_text(
             messages=messages,
             reasoning_effort="high",
             include_reasoning=False,

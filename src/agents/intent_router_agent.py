@@ -69,15 +69,14 @@ from src.prompts.prompts import (
     STARTUP_TYPE_PROMPT
 )
 
-from tests.mock_workflow_state import MOCK_STATE_EMPTY
-from src.tools.groq_tool import text_call
-
 from src.core.decorators import (
     handle_errors,
     log_execution,
     track_timing,
     retry_on_failure,
 )
+
+from src.tools.groq_tool import groq_tool
 
 
 class Intent_Router_Agent:
@@ -200,7 +199,7 @@ LLM Judge:
             }
         ]
 
-        startup_idea = text_call(
+        startup_idea = groq_tool.generate_text(
             messages=startup_idea_prompt
         )
 
@@ -225,7 +224,7 @@ LLM Judge:
             }
         ]
 
-        startup_type = text_call(
+        startup_type = groq_tool.generate_text(
             messages=startup_type_prompt
         )
 
@@ -239,7 +238,7 @@ LLM Judge:
         # Send the prepared prompt to the LLM and receive the
         # raw workflow-intent classification.
 
-        intent_response = text_call(
+        intent_response = groq_tool.generate_text(
             messages=intent_prompt
         )
 
@@ -725,6 +724,8 @@ LLM Judge:
 
 if __name__ == "__main__":
 
+    from tests.mock_workflow_state import MOCK_STATE_EMPTY
+    
     # ------------------------------------------------
     # 1. Load mock workflow state
     # ------------------------------------------------

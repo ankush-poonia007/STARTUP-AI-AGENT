@@ -44,7 +44,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import TECH_ADVISOR_PROMPT
-from src.tools.groq_tool import text_call
+from src.tools.groq_tool import groq_tool
 
 
 class TechAdvisorAgent:
@@ -224,7 +224,7 @@ Return the response using the exact output structure defined in the system instr
         # 5. Generate technology recommendations
         # ----------------------------------------------------
 
-        tech_stack_response = text_call(
+        tech_stack_response = groq_tool.generate_text(
             messages=messages
         )
 

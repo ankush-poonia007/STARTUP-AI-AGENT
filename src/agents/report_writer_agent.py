@@ -43,7 +43,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import REPORT_WRITER_PROMPT
-from src.tools.gemini_tool import text_call
+from src.tools.gemini_tool import gemini_tool
 
 
 def to_prompt_string(value):
@@ -367,7 +367,7 @@ ALL substantive report content must come from the supplied workflow outputs.
         # STEP 5 — GENERATE FINAL REPORT USING GEMINI
         # ==============================================================
 
-        final_report = text_call(
+        final_report = gemini_tool.generate_text(
             user_prompt=final_prompt
         )
 

@@ -31,16 +31,25 @@ PDF_OUTPUT_DIR      = "data/outputs"
 GEMINI_API_KEYS     = [
     os.getenv(f"GEMINI_API_KEY_{i}") for i in range(1, 21)
 ]
-GEMINI_API_KEYS     = [k for k in GEMINI_API_KEYS if k]
+GEMINI_API_KEYS     = [
+    k for k in GEMINI_API_KEYS if k
+]
 
 # ── GROQ API KEYS ────────────────────────────────────────────
 GROQ_API_KEYS       = [
     os.getenv(f"GROQ_API_KEY_{i}") for i in range(1, 6)
 ]
-GROQ_API_KEYS       = [k for k in GROQ_API_KEYS if k]
+GROQ_API_KEYS       = [
+    k for k in GROQ_API_KEYS if k
+]
 
 # ── TAVILY ───────────────────────────────────────────────────
-TAVILY_API_KEY      = os.getenv("TAVILY_API_KEY")
+TAVILY_API_KEYS     = [
+    os.getenv(f"TAVILY_API_KEY_{i}") for i in range(1, 6)
+]
+TAVILY_API_KEYS     = [
+    k for k in TAVILY_API_KEYS if k
+]
 
 # ── STORAGE CONSTANTS ───────────────────────────────────────────────────
 CHUNK_SIZE = 250

@@ -100,17 +100,13 @@ from src.core.decorators import (
     retry_on_failure
 )
 
-
 from src.config.settings import GEMINI_LITE_MODEL
 
-
-from src.tools.gemini_tool import text_call
+from src.tools.gemini_tool import gemini_tool
 from src.tools.pdf_tool import read_pdf
-
 
 import threading
 import copy
-
 
 from datetime import datetime
 from concurrent.futures import (
@@ -566,7 +562,7 @@ class OrchestratorAgent:
             }
         ]
 
-        response = text_call(
+        response = gemini_tool.generate_text(
             prompt,
             gemini_model=GEMINI_LITE_MODEL
         )

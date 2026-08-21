@@ -98,7 +98,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import RISK_ANALYST_PROMPT
-from src.tools.gemini_tool import text_call
+from src.tools.gemini_tool import gemini_tool
 
 
 class RiskAnalystAgent:
@@ -328,7 +328,7 @@ Do not invent facts, statistics, competitors, regulations, technical requirement
         # 7. Generate risk analysis
         # ============================================================
 
-        risk_analysis_response = text_call(
+        risk_analysis_response = gemini_tool.generate_text(
             user_prompt=message
         )
 

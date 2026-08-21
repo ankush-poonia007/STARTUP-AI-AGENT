@@ -98,7 +98,7 @@ from src.prompts.prompts import (
 )
 
 
-from src.tools.groq_tool import text_call
+from src.tools.groq_tool import groq_tool
 
 
 class LLMJudgeAgent:
@@ -425,7 +425,7 @@ END OF WORKFLOW DATA
         # 5. Execute Groq structured judgment
         # ============================================================
 
-        response = text_call(
+        response = groq_tool.generate_text(
             messages=messages,
             temperature=0.0,
             response_format=self.MID_RESPONSE_FORMAT,
@@ -708,7 +708,7 @@ END SOURCE DATA
         # 5. Execute Groq structured judgment
         # ============================================================
 
-        response = text_call(
+        response = groq_tool.generate_text(
             messages=messages,
             temperature=0.0,
             response_format=self.FINAL_RESPONSE_FORMAT,
