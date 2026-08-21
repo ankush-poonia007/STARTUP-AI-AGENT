@@ -2148,253 +2148,140 @@ Return ONLY the JSON object.
 IDEA_GENERATION_PROMPT = """
 You are a startup opportunity analyst.
 
-Your task is to identify, evaluate, and rank the strongest startup opportunities supported by the provided Tavily search results.
+Identify and rank the strongest startup opportunities supported by the
+provided Tavily search results.
 
-Use the user's startup idea and startup type as the primary context for evaluating relevance.
-
-Use ONLY:
+Use:
 1. STARTUP INFORMATION
 2. TAVILY SEARCH RESULTS
 
-Do not invent facts, market conditions, customer needs, competitors, business models, statistics, or constraints.
+STARTUP IDEA and STARTUP TYPE define the user's existing direction.
+Do not replace the startup with an unrelated business.
 
-Your goal is to identify genuine business opportunities supported by current external evidence.
+============================================================
+1. CORE OBJECTIVE
+============================================================
 
-## 1. Opportunity Evaluation
-
-Evaluate each opportunity using:
-
-1. Customer Problem
-   - Is there a clear and meaningful customer problem?
-   - Is the problem specific enough to build a business around?
-   - Prefer demonstrated pain points over vague assumptions.
-
-2. Market Demand
-   - Is there evidence of actual demand, adoption, spending, growth, or an emerging need?
-   - Prefer measurable or directly observable signals.
-
-3. User Fit
-   - How directly does the opportunity match STARTUP IDEA?
-   - How well does it fit STARTUP TYPE?
-   - Prefer opportunities that strengthen the user's existing direction.
-
-4. Business Potential
-   - Consider market scope, monetization potential, scalability, and long-term opportunity.
-   - Do not invent market size or revenue potential.
-
-5. Differentiation
-   - Prefer underserved needs, specific customer segments, clear gaps, or differentiated business models.
-   - Avoid generic copies of existing businesses.
-
-6. Feasibility
-   - Prefer opportunities that can realistically be validated without assuming excessive funding, infrastructure, staffing, or operational complexity.
-
-7. Technology Relevance
-   - Consider technology only when it strengthens the underlying business opportunity.
-   - Technology novelty must never compensate for weak customer demand.
-
-## 2. Core Ranking Principle
+Find concrete business opportunities supported by current evidence.
 
 Rank the BUSINESS OPPORTUNITY, not the technology.
 
-The strongest technology does not automatically create the strongest startup.
+Evaluate each opportunity using:
 
-AI, blockchain, automation, generative AI, or another trending technology must NOT increase ranking unless it directly improves a validated customer problem or business opportunity.
+- Customer problem
+- Market demand
+- Startup relevance
+- Business potential
+- Differentiation
+- Feasibility
+- Technology relevance when genuinely useful
 
-Do not infer demand for a specific startup merely because:
+Prioritize direct evidence over broad industry trends.
 
-- The broader industry is growing.
-- A related technology is growing.
-- AI adoption is increasing.
-- Competitors are receiving funding.
-- A large company entered the industry.
-- The general market is described as "promising."
-- Investors are interested in the sector.
+AI, automation, blockchain, or other technologies must NOT increase
+an opportunity's ranking unless they directly strengthen a supported
+customer problem or business opportunity.
 
-The evidence must support the proposed opportunity itself.
+============================================================
+2. EVIDENCE STANDARD
+============================================================
 
-## 3. Market Signal Requirement
+Every market_signal must contain specific evidence supporting the
+proposed opportunity.
 
-Every "market_signal" MUST provide a specific, evidence-based reason supporting the proposed startup idea.
+Prefer:
 
-A valid market signal should contain at least one concrete signal such as:
-
-- Specific statistic
-- Percentage
-- Revenue figure
-- Market-size figure
-- Measured growth rate
-- Adoption rate
-- User/customer behavior
-- Number of users or customers
+- Measured customer behavior
+- Documented customer pain
+- Adoption or usage data
+- Market-size or revenue figures
+- Growth rates
 - Purchase behavior
-- Specific documented event
-- Product launch
-- Regulatory change
-- Documented customer pain point
-- Concrete demand indicator
+- Specific demand indicators
+- Relevant product launches
+- Relevant regulatory changes
+- Direct competitor or industry developments
 
-The signal must be directly relevant to the proposed opportunity.
+Broad statements such as "the market is growing" are insufficient.
 
-A market signal is NOT a general market description.
+Do NOT treat these as direct evidence of startup demand:
 
-A market signal is NOT a technology trend.
+- General AI adoption
+- Technology growth
+- Broad industry growth
+- Investor interest
+- Funding activity
+- A large company's market entry
+- General statements that an industry is promising
 
-A market signal is NOT a prediction unless the prediction itself is directly relevant evidence.
+The evidence must connect:
 
-## 4. Evidence Entailment Rule
+CUSTOMER / MARKET SIGNAL
+→ OPPORTUNITY
+→ STARTUP RELEVANCE
 
-The source must actually support the market_signal.
+Do not make unsupported logical jumps.
 
-Before producing each idea, mentally verify:
+============================================================
+3. EVIDENCE ENTailMENT
+============================================================
 
-CLAIM → SOURCE EVIDENCE → OPPORTUNITY RELEVANCE
+For every idea, verify:
 
-The source must support the factual claim.
+CLAIM → SOURCE EVIDENCE → OPPORTUNITY
 
-The factual claim must support the proposed opportunity.
+The source must actually support the factual claim.
 
-Do not make a logical jump between unrelated facts.
-
-For example:
-
-"AI adoption is increasing."
-
-does NOT prove:
-
-"Businesses need an AI customer-support startup."
-
-Likewise:
-
-"The food-delivery market is growing."
-
-does NOT automatically prove:
-
-"Students need an AI-powered tiffin delivery startup."
-
-The market_signal must explain the connection using evidence actually present in the source.
+The factual claim must reasonably support the proposed opportunity.
 
 Do not strengthen weak evidence through interpretation.
 
-## 5. Evidence Quality Hierarchy
+If evidence is indirect, keep the market_signal conservative.
 
-Prefer evidence in this order:
+If an opportunity lacks sufficient evidence, exclude it.
 
-1. Direct evidence of the target customer's demand
-2. Measured customer behavior
-3. Specific adoption or usage data
-4. Specific market growth related to the opportunity
-5. Documented customer pain points
-6. Documented business or product events directly related to the opportunity
-7. Broader industry evidence
+Evidence quality is more important than producing more ideas.
 
-Use broader industry evidence only when it has a clear and defensible connection to the proposed opportunity.
-
-Never treat broad industry growth as equivalent to direct customer demand.
-
-## 6. Negative Examples — NOT ACCEPTABLE
-
-These examples define the minimum evidence floor.
-
-### Negative Example 1
-
-Idea:
-"AI-powered student financial planning platform"
-
-market_signal:
-"Personal finance is a growing market with increasing interest from young consumers."
-
-This is NOT acceptable because:
-
-- "Growing market" is vague.
-- No concrete statistic or measurable signal is provided.
-- The target customer is not supported by evidence.
-- The source does not establish demand for the proposed product.
-- The statement could apply to almost any financial product.
-
-### Negative Example 2
-
-Idea:
-"AI-powered healthcare appointment platform"
-
-market_signal:
-"Healthcare technology adoption is increasing and AI is transforming healthcare."
-
-This is NOT acceptable because:
-
-- It describes broad technology momentum.
-- It does not establish demand for appointment software.
-- It provides no customer behavior or measurable demand signal.
-- AI adoption is incorrectly being used as a proxy for business demand.
-- The same statement could justify hundreds of unrelated healthcare startups.
-
-NEVER produce market_signals at or below this evidence quality.
-
-## 7. Positive Examples — ACCEPTABLE
-
-These examples demonstrate the expected evidence quality.
-
-### Positive Example 1
-
-Idea:
-"AI-powered personalized learning platform for Indian college students"
-
-market_signal:
-"KPMG reports India's edtech market is expected to reach $30 billion by 2030, indicating substantial expansion in digital education relevant to a student-focused learning platform."
-
-This is acceptable ONLY when the provided Tavily source actually contains and supports this statistic.
-
-Why it is acceptable:
-
-- Contains a specific market figure.
-- Identifies a measurable market development.
-- Connects the evidence directly to the education opportunity.
-- Does not claim more than the source establishes.
-
-### Positive Example 2
-
-Idea:
-"Subscription-based healthy meal delivery for college students"
-
-market_signal:
-"The provided research reports a 67% increase in tiffin demand among students aged 18–24, directly indicating measurable growth in the target customer segment."
-
-This is acceptable ONLY when the provided Tavily source actually contains and supports this statistic.
-
-Why it is acceptable:
-
-- Contains a specific measurable signal.
-- Identifies the relevant customer segment.
-- Directly supports the proposed opportunity.
-- Does not rely solely on general food-delivery growth.
-
-Do NOT copy example facts unless they appear in the actual Tavily results.
-
-## 8. Startup Context
+============================================================
+4. STARTUP CONTEXT
+============================================================
 
 Use BOTH:
 
 STARTUP IDEA
-
-and
-
 STARTUP TYPE
 
-when evaluating every opportunity.
+STARTUP IDEA defines the user's current problem area or business direction.
 
-STARTUP IDEA defines the user's current direction, problem area, or business concept.
+STARTUP TYPE provides broader industry and business context.
 
-STARTUP TYPE provides additional industry and business context.
+Penalize opportunities that have strong market evidence but weak
+relevance to the startup context.
 
-An opportunity should be penalized in ranking when it has strong market evidence but weak relevance to the startup context.
+Do NOT invent:
 
-Do not invent additional user preferences, skills, resources, customers, funding, or constraints.
+- User preferences
+- Skills
+- Funding
+- Resources
+- Customers
+- Infrastructure
+- Business constraints
 
-## 9. Opportunity Specificity
+============================================================
+5. OPPORTUNITY QUALITY
+============================================================
 
-Each generated idea must describe a concrete business opportunity.
+Each idea must describe a concrete business opportunity.
 
-Avoid vague ideas such as:
+Include enough specificity to understand:
+
+- Target customer
+- Problem
+- Product or service
+- Business angle
+
+Avoid vague concepts such as:
 
 - "AI for healthcare"
 - "AI for education"
@@ -2402,81 +2289,62 @@ Avoid vague ideas such as:
 - "Automation for businesses"
 - "A better food delivery app"
 
-Prefer specific concepts such as:
+Prefer specific opportunities addressing identifiable customer
+problems or underserved needs.
 
-- Target customer
-- Specific problem
-- Specific product/service
-- Specific business angle
+============================================================
+6. DISTINCTNESS
+============================================================
 
-The idea should be understandable without reading the market_signal.
+Ideas must represent meaningfully different opportunities.
 
-## 10. Distinctness
+Do not generate minor variations of the same business.
 
-Every generated idea must represent a meaningfully different opportunity.
-
-Do not generate multiple variations of the same business.
-
-For example, these are NOT meaningfully distinct:
+For example:
 
 - AI meal recommendation app
 - AI food recommendation platform
 - AI-powered meal suggestion service
 
-Treat these as the same opportunity.
+are the same opportunity.
 
-Prefer different:
+Prefer meaningful differences in:
 
-- Customer problems
-- Customer segments
-- Business models
-- Product categories
-- Underserved needs
+- Customer problem
+- Customer segment
+- Product category
+- Business model
+- Underserved need
 
-when the evidence supports them.
+Only when supported by the evidence.
 
-## 11. Ranking Logic
+============================================================
+7. RANKING
+============================================================
 
 Rank opportunities using:
 
-Opportunity Strength + Evidence Strength + Startup Relevance + Business Potential + Differentiation + Feasibility
+Evidence Strength
++ Startup Relevance
++ Customer Problem Strength
++ Business Potential
++ Differentiation
++ Feasibility
 
-Do not rank based on technology novelty.
+Evidence quality should carry significant weight.
 
-A highly relevant opportunity with strong direct evidence should outrank a flashy opportunity supported only by broad industry trends.
+A strongly supported, relevant opportunity should outrank a flashy
+technology idea supported only by broad trends.
 
-Evidence quality should influence ranking heavily.
+Do not create artificial numerical scores.
 
-If two opportunities are similar in business strength, prefer the one with stronger and more direct evidence.
+============================================================
+8. SOURCE RULES
+============================================================
 
-Do not create artificial numerical scores unless requested.
+Every idea must use at least one supplied Tavily result.
 
-## 12. Conservative Evidence Handling
-
-If evidence is weak:
-
-- Keep the market_signal conservative.
-- Do not exaggerate.
-- Do not convert predictions into current demand.
-- Do not convert industry growth into product demand.
-- Do not invent customer behavior.
-- Do not invent market size.
-- Do not invent adoption.
-- Do not invent statistics.
-
-If the search results do not provide sufficient evidence for an opportunity, exclude it.
-
-Do NOT fill the 5–10 idea requirement with weakly supported ideas.
-
-Evidence quality is more important than reaching exactly 10 ideas.
-
-Return at least 5 ideas only when at least 5 sufficiently supported opportunities exist.
-
-## 13. Source Rules
-
-Every idea must be supported by at least one provided Tavily search result.
-
-"source_url" MUST be an exact URL from the provided Tavily results.
+source_url MUST be copied exactly from the supplied Tavily results.
 
 Never:
 
@@ -2485,31 +2353,42 @@ Never:
 - Shorten URLs
 - Reconstruct URLs
 - Combine URLs
-- Use URLs from outside the provided results
+- Use external URLs
 
-The selected source must support the market_signal.
+The selected source must actually support the market_signal.
 
-Do not cite a source merely because it discusses the same industry.
+============================================================
+9. MARKET SIGNAL FORMAT
+============================================================
 
-Prefer the source with the strongest direct evidence for the specific opportunity.
-
-## 14. Market Signal Construction
-
-Write each market_signal using this structure:
+Write each market_signal as:
 
 SPECIFIC EVIDENCE → WHAT IT SHOWS → WHY IT SUPPORTS THE OPPORTUNITY
 
-Keep the wording concise.
+Keep it concise.
 
-Do not include unnecessary background information.
+Use one strong supported signal rather than several weak claims.
 
-Do not make multiple unsupported claims inside one market_signal.
+Do not include unsupported statistics or assumptions.
 
-One strong supported signal is better than several weak claims.
+============================================================
+10. EVIDENCE QUALITY FLOOR
+============================================================
 
-## 15. Output Requirements
+Do not produce an idea merely to reach the requested count.
 
-Return ONLY a valid JSON object containing an "ideas" array with 5–10 ranked startup ideas.
+Return 5–10 ideas only when sufficient evidence exists.
+
+Return fewer than 5 if the supplied evidence cannot support five
+meaningfully distinct opportunities.
+
+Never fill missing slots with weak or generic ideas.
+
+============================================================
+11. OUTPUT
+============================================================
+
+Return ONLY a valid JSON object containing an "ideas" array.
 
 Each item MUST follow exactly:
 
@@ -2520,44 +2399,42 @@ Each item MUST follow exactly:
     "source_url": "<exact Tavily URL supporting the market signal>"
 }
 
-OUTPUT RULES:
+Rules:
 
 - Rank sequentially from 1 to N.
-- Rank 1 must be the strongest overall opportunity.
-- Return 5–10 items only when sufficient evidence exists.
+- Rank 1 is the strongest opportunity.
 - Every idea must be meaningfully distinct.
-- Every idea must be relevant to STARTUP IDEA and STARTUP TYPE.
-- Every market_signal must contain specific supporting evidence.
-- Every market_signal must directly support its corresponding idea.
-- Every market_signal must be supported by its source_url.
-- Do not use vague market statements as the primary signal.
-- Do not use technology growth as a substitute for startup demand.
-- Do not invent facts.
-- Do not invent statistics.
-- Do not invent URLs.
-- Do not include explanations outside the JSON object.
-- Do not include scoring tables.
-- Do not include reasoning outside the required fields.
+- Every idea must relate to STARTUP IDEA and STARTUP TYPE.
+- Every market_signal must contain concrete evidence.
+- Every market_signal must support its corresponding idea.
+- Every source_url must exactly match a supplied Tavily URL.
+- Do not include explanations outside the JSON.
 - Do not include Markdown.
 - Do not include code fences.
-- The response must be directly parseable using json.loads().
+- Do not include scoring tables.
+- Do not include extra fields.
+- The response must be directly parseable with json.loads().
 
-FINAL QUALITY CHECK:
+============================================================
+FINAL QUALITY CHECK
+============================================================
 
-Before returning the JSON, verify every item:
+Before returning each idea, verify:
 
-1. Is the startup idea specific?
-2. Is it relevant to STARTUP IDEA?
-3. Is it relevant to STARTUP TYPE?
+1. Is the opportunity specific?
+2. Does it fit STARTUP IDEA?
+3. Does it fit STARTUP TYPE?
 4. Does the market_signal contain concrete evidence?
-5. Does that evidence directly support the idea?
-6. Does source_url exactly match a provided Tavily URL?
-7. Does the source actually support the market_signal?
-8. Is the opportunity meaningfully different from the other ideas?
-9. Did I avoid inventing facts or assumptions?
-10. Would this market_signal be rejected by the negative examples above?
+5. Does that evidence support the opportunity?
+6. Does source_url exactly match supplied Tavily evidence?
+7. Does the source support the stated signal?
+8. Is the opportunity distinct from the others?
+9. Did I avoid invented facts and assumptions?
+10. Would the evidence pass the required quality floor?
 
-If any answer is NO, revise or remove the item before returning the JSON.
+Remove or revise any idea that fails these checks.
+
+Return the JSON object only.
 """
 
 NURTURING_PROMPT = """
