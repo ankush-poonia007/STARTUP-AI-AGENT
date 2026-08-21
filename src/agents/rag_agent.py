@@ -1,3 +1,78 @@
+"""
+File        : agents/rag_agent.py
+Triggered By:
+    - full_analysis
+    - partial_idea
+    - nurturing
+    - Any workflow containing pitch_deck_text
+
+Tools:
+    - gemini_tool.py
+    - chroma_tool.py
+    - bm25_tool.py
+    - reranker_tool.py
+
+Input:
+    workflow_state["user_input"]
+        Original user request.
+
+    workflow_state["startup_idea"]
+        Normalized startup concept.
+
+    workflow_state["startup_type"]
+        Startup industry/category.
+
+    workflow_state["pitch_deck_text"]
+        List of pitch-deck document chunks containing text and metadata.
+
+Output:
+    workflow_state["rag_context"]
+        Final ranked and reranked pitch-deck chunks.
+
+    workflow_state["pipeline_status"]["RAGAgent"]
+        Updated to "success" after successful execution.
+
+Responsibilities:
+    - Build a contextual retrieval query.
+    - Generate embeddings for pitch-deck chunks.
+    - Ingest chunks into ChromaDB and BM25.
+    - Retrieve candidates from both retrieval systems.
+    - Normalize ChromaDB results.
+    - Fuse ChromaDB and BM25 rankings using Reciprocal Rank Fusion.
+    - Rerank the fused candidates using a CrossEncoder.
+    - Store the final ranked context in workflow state.
+
+Execution Flow:
+    1. Read startup context.
+    2. Build contextual retrieval query.
+    3. Check whether pitch-deck chunks are available.
+    4. Generate chunk embeddings with Gemini.
+    5. Ingest chunks into ChromaDB.
+    6. Ingest chunks into BM25.
+    7. Generate query embedding with Gemini.
+    8. Retrieve candidates from ChromaDB.
+    9. Normalize ChromaDB results.
+    10. Retrieve candidates from BM25.
+    11. Fuse both rankings using RRF.
+    12. Rerank fused candidates using CrossEncoder.
+    13. Store final RAG context.
+    14. Update pipeline status.
+    15. Return updated workflow state.
+
+Design Notes:
+    - ChromaDB provides semantic/vector retrieval.
+    - BM25 provides lexical retrieval.
+    - RRF combines both retrieval rankings.
+    - CrossEncoder performs final relevance reranking.
+    - The contextual query is reused throughout retrieval and reranking.
+    - If pitch_deck_text is empty, the agent returns an empty RAG context
+      without executing the retrieval pipeline.
+
+Failure Handling:
+    Execution logging, timing, retry behavior, and exception handling
+    are managed centrally by src/core/decorators.py.
+"""
+
 from src.core.decorators import (
     handle_errors,
     log_execution,
@@ -14,50 +89,63 @@ import src.tools.bm25_tool as bm25_tool
 
 class RAGAgent:
     """
-    Retrieval-Augmented Generation (RAG) agent responsible for
-    retrieving the most relevant context from the pitch deck.
+    Retrieve and rank the most relevant information from the startup's
+    pitch-deck context.
 
-    This agent operates as one stage in the multi-agent workflow.
-    It receives the shared workflow state, processes the available
-    pitch deck chunks, performs hybrid retrieval using ChromaDB
-    and BM25, fuses both rankings using Reciprocal Rank Fusion
-    (RRF), and applies CrossEncoder reranking.
+    RAGAgent implements the project's hybrid retrieval pipeline by
+    combining semantic retrieval, lexical retrieval, rank fusion,
+    and CrossEncoder reranking.
 
-    Workflow:
-        1. Read user input and pitch deck chunks.
-        2. Generate embeddings for document chunks.
-        3. Store chunks in ChromaDB and BM25.
-        4. Generate an embedding for the user query.
-        5. Retrieve candidates from ChromaDB and BM25.
-        6. Normalize ChromaDB results.
-        7. Fuse retrieval results using RRF.
-        8. Rerank fused results using a CrossEncoder.
-        9. Store the final ranked context in the workflow state.
+    Retrieval Pipeline
+    ------------------
+        Pitch Deck Chunks
+              ↓
+        Gemini Embeddings
+              ↓
+        ┌───────────────┐
+        │ ChromaDB      │
+        │ BM25          │
+        └───────┬───────┘
+                ↓
+        Reciprocal Rank Fusion
+                ↓
+        CrossEncoder Reranking
+                ↓
+        workflow_state["rag_context"]
 
-    Input State Requirements:
-        workflow_state["user_input"]:
-            User's search/query text.
+    Input State
+    -----------
+    workflow_state["user_input"]:
+        Original user request.
 
-        workflow_state["pitch_deck_text"]:
-            List of document chunk dictionaries containing at least
-            the chunk text and required metadata.
+    workflow_state["startup_idea"]:
+        Normalized startup concept.
 
-        workflow_state["pipeline_status"]:
-            Dictionary used to track the execution status of agents.
+    workflow_state["startup_type"]:
+        Startup category used to provide retrieval context.
 
-    Output State:
-        workflow_state["rag_context"]:
-            Top-ranked and reranked document chunks containing their
-            text, metadata, RRF score, and reranker score.
+    workflow_state["pitch_deck_text"]:
+        Pitch-deck chunks available for retrieval.
 
-        workflow_state["pipeline_status"]["RAGAgent"]:
-            Updated to "success" when the RAG pipeline completes
-            successfully.
+    Output State
+    ------------
+    workflow_state["rag_context"]:
+        Final ranked retrieval results.
 
-    Notes:
-        This agent performs retrieval and ranking only. It does not
-        generate the final answer to the user. Downstream agents can
-        consume "rag_context" from the shared workflow state.
+    workflow_state["pipeline_status"]["RAGAgent"]:
+        Execution status of the RAG pipeline.
+
+    Important:
+        This agent performs retrieval and ranking only.
+
+        It does not:
+            - Generate a final startup analysis.
+            - Generate recommendations.
+            - Call an LLM for answer generation.
+            - Modify the original pitch-deck content.
+
+        Its responsibility ends after producing ranked retrieval
+        context for downstream agents.
     """
 
     @handle_errors
@@ -66,40 +154,69 @@ class RAGAgent:
     @retry_on_failure
     def run(self, workflow_state: dict) -> dict:
         """
-        Execute the RAG retrieval pipeline for the current workflow state.
-
-        The method reads the user query and pitch deck chunks from the
-        shared multi-agent workflow state, performs hybrid retrieval
-        through ChromaDB and BM25, combines the results using Reciprocal
-        Rank Fusion, and reranks the fused candidates using a
-        CrossEncoder.
+        Execute the hybrid pitch-deck retrieval pipeline.
 
         Parameters
         ----------
         workflow_state : dict
-            Shared state passed between agents in the multi-agent
-            workflow. It must contain "user_input", "pitch_deck_text",
-            and "pipeline_status".
+            Shared workflow state containing the startup context and
+            available pitch-deck chunks.
 
         Returns
         -------
         dict
-            The updated workflow state containing the final ranked
-            retrieval context under "rag_context" and the updated
-            RAGAgent execution status under "pipeline_status".
+            Updated workflow state containing:
+                - workflow_state["rag_context"]
+                - workflow_state["pipeline_status"]["RAGAgent"]
+
+        Processing Stages
+        -----------------
+        1. Read startup context.
+        2. Build the contextual retrieval query.
+        3. Check for available pitch-deck chunks.
+        4. Generate embeddings for all chunks.
+        5. Store chunks in ChromaDB.
+        6. Store chunks in BM25.
+        7. Generate the contextual query embedding.
+        8. Retrieve semantic candidates from ChromaDB.
+        9. Normalize ChromaDB results.
+        10. Retrieve lexical candidates from BM25.
+        11. Fuse both retrieval rankings using RRF.
+        12. Apply CrossEncoder reranking.
+        13. Store the final ranked context.
+        14. Update pipeline status.
+        15. Return the updated workflow state.
 
         Notes
         -----
-        If "pitch_deck_text" is empty, the method skips retrieval,
-        sets "rag_context" to an empty list, marks the agent as
-        successful, and returns the workflow state.
+        The same contextual retrieval query is used for semantic retrieval,
+        BM25 retrieval, and CrossEncoder reranking.
+
+        If pitch_deck_text is empty, the method returns an empty
+        rag_context and marks the agent as successful.
         """
 
-        user_input = workflow_state["user_input"]
+        # ============================================================
+        # 1. Read startup context
+        # ============================================================
 
-        # ----------------------------------------------------
-        # 1. Check pitch_deck_text
-        # ----------------------------------------------------
+        user_input = workflow_state["user_input"]
+        startup_idea = workflow_state["startup_idea"]
+        startup_type = workflow_state["startup_type"]
+
+        # ============================================================
+        # 2. Build contextual retrieval query
+        # ============================================================
+
+        retrieval_query = (
+            f"{startup_idea} "
+            f"{startup_type} "
+            f"{user_input}"
+        )
+
+        # ============================================================
+        # 3. Check pitch_deck_text
+        # ============================================================
 
         chunks = workflow_state["pitch_deck_text"]
 
@@ -112,58 +229,54 @@ class RAGAgent:
 
             return workflow_state
 
-        # ----------------------------------------------------
-        # 2. pitch_deck_text is already a list of chunk dicts
-        # ----------------------------------------------------
-
-        # ----------------------------------------------------
-        # 3. Batch embed chunks → Gemini
-        # ----------------------------------------------------
+        # ============================================================
+        # 4. Batch embed chunks → Gemini
+        # ============================================================
 
         embedding_list = embedding_call(
             chunks=chunks
         )
 
-        # ----------------------------------------------------
-        # 4. Ingest chunks → ChromaDB
-        # ----------------------------------------------------
+        # ============================================================
+        # 5. Ingest chunks → ChromaDB
+        # ============================================================
 
         chroma_tool.add_documents(
             chunks=chunks,
             embeddings=embedding_list
         )
 
-        # ----------------------------------------------------
-        # 5. Ingest chunks → BM25
-        # ----------------------------------------------------
+        # ============================================================
+        # 6. Ingest chunks → BM25
+        # ============================================================
 
         bm25_tool.add_documents(
             chunks=chunks
         )
 
-        # ----------------------------------------------------
-        # 6. Embed user input → Gemini
-        # ----------------------------------------------------
-
-        user_input_embedding = embedding_call(
+        # ============================================================
+        # 7. Embed contextual query → Gemini
+        # ============================================================
+        
+        retrieval_query_embedding = embedding_call(
             [
                 {
-                    "text": user_input
+                    "text": retrieval_query
                 }
             ]
         )
 
-        # ----------------------------------------------------
-        # 7. Query ChromaDB
-        # ----------------------------------------------------
+        # ============================================================
+        # 8. Query ChromaDB
+        # ============================================================
 
         chroma_retrieval = chroma_tool.query_collection(
-            user_input=user_input_embedding
+            user_input=retrieval_query_embedding
         )
 
-        # ----------------------------------------------------
-        # 8. Normalize ChromaDB results
-        # ----------------------------------------------------
+        # ============================================================
+        # 9. Normalize ChromaDB results
+        # ============================================================
 
         normalized_result = (
             chroma_tool.normalize_chroma_results(
@@ -171,58 +284,84 @@ class RAGAgent:
             )
         )
 
-        # ----------------------------------------------------
-        # 9. Query BM25
-        # ----------------------------------------------------
+        # ============================================================
+        # 10. Query BM25
+        # ============================================================
 
         bm25_retrieval = bm25_tool.bm25_retrieve(
-            user_query=user_input
+            user_query=retrieval_query
         )
 
-        # ----------------------------------------------------
-        # 10. Reciprocal Rank Fusion
-        # ----------------------------------------------------
+        # ============================================================
+        # 11. Reciprocal Rank Fusion
+        # ============================================================
 
         fused_list = chroma_tool.reciprocal_rank_fusion(
             chroma_results=normalized_result,
             bm25_results=bm25_retrieval
         )
 
-        # ----------------------------------------------------
-        # 11. CrossEncoder reranking
-        # ----------------------------------------------------
+        # ============================================================
+        # 12. CrossEncoder reranking
+        # ============================================================
 
         final_list = rerank(
-            query=user_input,
+            query=retrieval_query,
             retrieved_chunks=fused_list
         )
 
-        # ----------------------------------------------------
-        # 12. Write final RAG context
-        # ----------------------------------------------------
+        # ============================================================
+        # 13. Write final RAG context
+        # ============================================================
 
         workflow_state["rag_context"] = final_list
 
-        # ----------------------------------------------------
-        # 13. Update pipeline status
-        # ----------------------------------------------------
+        # ============================================================
+        # 14. Update pipeline status
+        # ============================================================
 
         workflow_state["pipeline_status"]["RAGAgent"] = (
             "success"
         )
 
+        # ============================================================
+        # 15. Return updated workflow state
+        # ============================================================
+
         return workflow_state
 
 
+# ================================================================
+# STANDALONE TEST
+# Allows RAGAgent to be tested independently using the shared
+# mock workflow state and displays the final ranked context.
+# ================================================================
+
 if __name__ == "__main__":
-    
+
+    # ============================================================
+    # 1. Load mock workflow state
+    # ============================================================
+
     from tests.mock_workflow_state import MOCK_STATE_FULL
-    
+
+    # ============================================================
+    # 2. Initialize RAGAgent
+    # ============================================================
+
     agent = RAGAgent()
+
+    # ============================================================
+    # 3. Execute RAG retrieval pipeline
+    # ============================================================
 
     result = agent.run(
         MOCK_STATE_FULL.copy()
     )
+
+    # ============================================================
+    # 4. Display final ranked RAG context
+    # ============================================================
 
     print("\n" + "=" * 80)
     print("RAG CONTEXT")
@@ -232,6 +371,7 @@ if __name__ == "__main__":
         result["rag_context"],
         start=1
     ):
+
         print(f"\nRank: {rank}")
         print(f"Text: {chunk['text']}")
         print(f"Metadata: {chunk['metadata']}")
@@ -247,3 +387,10 @@ if __name__ == "__main__":
                 f"Rerank Score: "
                 f"{chunk['rerank_score']:.4f}"
             )
+
+    # ============================================================
+    # 5. Display execution errors
+    # ============================================================
+
+    print("\nERRORS:")
+    print(result["errors"])

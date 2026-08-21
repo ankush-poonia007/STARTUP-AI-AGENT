@@ -35,29 +35,21 @@ from src.tools.groq_tool import text_call
 class MVPAdvisorAgent:
     """
     MVP Advisor Agent responsible for generating a practical MVP
-    recommendation based on market research and available startup-specific
-    context.
-
-    This agent operates as part of the multi-agent workflow and consumes
-    market_data as the primary source of evidence. It can also use
-    rag_context when relevant startup-specific information is available.
-
-    The agent focuses on:
-        - Identifying and prioritizing core MVP features.
-        - Defining target user personas.
-        - Suggesting a realistic 3-month build scope.
-        - Establishing a launch sequence.
-        - Separating evidence-based findings from product recommendations
-          and unsupported assumptions.
+    recommendation using normalized startup context, market evidence,
+    and startup-specific RAG context.
 
     Input State:
+        workflow_state["startup_idea"]:
+            Normalized startup idea.
+
+        workflow_state["startup_type"]:
+            Startup industry/category.
+
         workflow_state["market_data"]:
-            Market research and evidence collected by upstream agents.
+            Market research and evidence collected upstream.
 
         workflow_state["rag_context"]:
-            List of retrieved startup-specific chunks from the RAG
-            pipeline. Each chunk may contain text, metadata, RRF score,
-            and reranker score.
+            Retrieved startup-specific context from the RAG pipeline.
 
     Output State:
         workflow_state["mvp_suggestions"]:
@@ -67,9 +59,9 @@ class MVPAdvisorAgent:
             Updated to "success" when the agent completes successfully.
 
     Notes:
-        Market data is treated as the primary source for market, customer,
-        competitor, trend, and product evidence. RAG context is used only
-        when it provides relevant startup-specific information.
+        Startup context defines what is being built.
+        Market data provides external market evidence.
+        RAG context provides startup-specific evidence.
     """
 
     @handle_errors
@@ -78,37 +70,17 @@ class MVPAdvisorAgent:
     @retry_on_failure
     def run(self, workflow_state: dict) -> dict:
         """
-        Generate MVP recommendations from market data and RAG context.
-
-        Parameters
-        ----------
-        workflow_state : dict
-            Shared state passed between agents in the multi-agent workflow.
-            The state must contain "market_data" and "rag_context".
-
-        Returns
-        -------
-        dict
-            Updated workflow state containing the generated MVP
-            recommendations under "mvp_suggestions" and the updated
-            MVPAdvisorAgent execution status.
-
-        Notes
-        -----
-        Market data is used as the primary evidence source.
-
-        RAG context is converted from a list of retrieved chunk
-        dictionaries into a clean text representation before being
-        included in the LLM prompt.
-
-        If no RAG context is available, an explicit fallback message
-        is provided instead of injecting an empty Python list into
-        the prompt.
+        Generate MVP recommendations from startup context,
+        market data, and RAG context.
         """
 
         # ----------------------------------------------------
-        # 1. Read market research and RAG context
+        # 1. Read startup context and research
         # ----------------------------------------------------
+
+        startup_idea = workflow_state["startup_idea"]
+
+        startup_type = workflow_state["startup_type"]
 
         market_data = workflow_state["market_data"]
 
@@ -130,7 +102,10 @@ class MVPAdvisorAgent:
                     if "rrf_score" in chunk
                     else ""
                 )
-                for index, chunk in enumerate(rag_context, start=1)
+                for index, chunk in enumerate(
+                    rag_context,
+                    start=1
+                )
             )
 
         else:
@@ -144,7 +119,16 @@ class MVPAdvisorAgent:
         # ----------------------------------------------------
 
         user_prompt = f"""
-Analyze the following startup context and generate the MVP recommendation according to your system instructions.
+Analyze the following startup context and generate the MVP recommendation
+according to your system instructions.
+
+### STARTUP IDEA
+
+{startup_idea}
+
+### STARTUP TYPE
+
+{startup_type}
 
 ### MARKET DATA
 
@@ -154,18 +138,24 @@ Analyze the following startup context and generate the MVP recommendation accord
 
 {rag_context_text}
 
-Use `MARKET DATA` as the primary source for market, customer, competitor, trend, and product evidence.
+Use STARTUP IDEA and STARTUP TYPE to understand the exact startup being
+evaluated.
 
-Use `RAG CONTEXT` only when it provides relevant startup-specific information such as product vision, pitch-deck insights, target users, business model, or existing product assumptions.
+Use MARKET DATA as the primary source for market, customer, competitor,
+trend, and product evidence.
 
-Preserve and use the source URLs provided in the context when making externally supported claims. Do not invent or modify sources.
+Use RAG CONTEXT only when it provides relevant startup-specific information
+such as product vision, target users, business model, or existing assumptions.
 
-Base the MVP recommendation on the evidence provided above. Clearly distinguish sourced facts from your own product recommendations and identify unsupported assumptions as requiring validation.
+Preserve and use source URLs provided in the supplied context.
+Do not invent or modify sources.
 
-        """
+Clearly distinguish sourced facts from product recommendations.
+Identify unsupported assumptions as requiring validation.
+"""
 
         # ----------------------------------------------------
-        # 4. Prepare system prompt and messages
+        # 4. Prepare messages
         # ----------------------------------------------------
 
         system_prompt = MVP_ADVISOR_PROMPT
@@ -186,11 +176,11 @@ Base the MVP recommendation on the evidence provided above. Clearly distinguish 
         # ----------------------------------------------------
 
         mvp_response = text_call(
-            prompt=messages
+            messages=messages
         )
 
         # ----------------------------------------------------
-        # 6. Store MVP recommendations in workflow state
+        # 6. Store MVP recommendations
         # ----------------------------------------------------
 
         workflow_state["mvp_suggestions"] = mvp_response
@@ -244,4 +234,9 @@ if __name__ == "__main__":
 
     print(
         workflow_state["mvp_suggestions"]
+    )
+    
+    print("\nERRORS:")
+    print(
+        workflow_state["errors"]
     )
