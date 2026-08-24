@@ -92,6 +92,10 @@ class GroqTool:
 
         api_key = self._get_next_key()
 
+        print(
+            f"🔑 Groq key selected: ...{api_key[-4:]}"
+        )
+        
         client = Groq(
             api_key=api_key
         )
@@ -120,11 +124,32 @@ class GroqTool:
         # ----------------------------------------------------------
 
         try:
+            len_system = len(messages[0]["content"])
+            len_user = len(messages[1]["content"])
+            print(
+                f"📦 Groq request: "
+                f"messages={len(messages)}"
+                f"system_promtp={len_system}"
+                f"user_prompt={len_user}"
+                f"comined={len_system+len_user}"
+            )
+            
+            print(messages[1]["content"][:500])
+            
             response = client.chat.completions.create(
                 **request_parameters
             )
 
         except Exception as error:
+            
+            print(
+                f"❌ Groq key ...{api_key[-4:]} failed"
+            )
+
+            print(
+                f"   Error: {type(error).__name__}: {error}"
+            )
+            
             status_code = getattr(error, "status_code", None)
             error_code = getattr(error, "code", None)
 

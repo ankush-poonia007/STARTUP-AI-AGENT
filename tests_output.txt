@@ -1,0 +1,161 @@
+
+════════════════════ 🧪 FOCUSED TEST: GENERAL_CHAT ════════════════════
+
+
+🧪 [GENERAL_CHAT]
+   Input    : What is the difference between an AI agent and a traditional chatbot?
+   Expected : general_chat
+   Actual   : general_chat              
+   Result   : ✅ PASS
+   Errors   : 0
+   ----------------------------------------
+
+═══════════════════════ 📊 FOCUSED TEST RESULT ═══════════════════════
+
+  Test     : GENERAL_CHAT
+  Expected : general_chat
+  Actual   : general_chat
+  Result   : ✅ PASS
+══════════════════════════════════════════════════════════════════════
+
+PS D:\PROJECTS\BizRadar_AI\startup-ai-agent> python app.py --test nurturing
+
+═════════════════════ 🧪 FOCUSED TEST: NURTURING ═════════════════════
+
+
+🧪 [NURTURING]
+   Input    : I already have a startup helping small businesses automate customer support. Help me improve it.
+   Expected : nurturing
+🤖 Orchestrating... ⠏🔑 Gemini key selected: ...BBNg
+🤖 Orchestrating... ⠋🔑 Gemini key selected: ...yBLw
+   Actual   : nurturing                 
+   Result   : ✅ PASS
+   Errors   : 0
+   ----------------------------------------
+
+═══════════════════════ 📊 FOCUSED TEST RESULT ═══════════════════════
+
+  Test     : NURTURING
+  Expected : nurturing
+  Actual   : nurturing
+  Result   : ✅ PASS
+══════════════════════════════════════════════════════════════════════
+
+
+════════════════════ 🧪 FOCUSED TEST: PARTIAL_IDEA ════════════════════
+
+
+🧪 [PARTIAL_IDEA]
+   Input    : I have a rough idea for an AI platform that helps students find internships.
+   Expected : partial_idea
+🤖 Orchestrating... ⠙🔑 Gemini key selected: ...BBNg
+🤖 Orchestrating... ⠼🔑 Gemini key selected: ...yBLw
+   Actual   : partial_idea              
+   Result   : ✅ PASS
+   Errors   : 10
+   ----------------------------------------
+
+═══════════════════════ 📊 FOCUSED TEST RESULT ═══════════════════════
+
+  Test     : PARTIAL_IDEA
+  Expected : partial_idea
+  Actual   : partial_idea
+  Result   : ✅ PASS
+══════════════════════════════════════════════════════════════════════
+
+
+════════════════════ 🧪 FOCUSED TEST: ADVANCEMENT ════════════════════
+
+
+🧪 [ADVANCEMENT]
+   Input    : My startup has paying customers. How should I scale it into a larger SaaS business?
+   Expected : advancement
+🤖 Orchestrating... ⠋🔑 Groq key selected: ...T0rb
+🤖 Orchestrating... ⠹📦 Groq request: messages=2system_promtp=348user_prompt=96comined=444
+User Input : My startup has paying customers. How should I scale it into a larger SaaS business?
+🤖 Orchestrating... ⠇🔑 Groq key selected: ...fbzY
+🤖 Orchestrating... ⠋📦 Groq request: messages=2system_promtp=563user_prompt=27comined=590
+Startup Idea: SaaS business
+🤖 Orchestrating... ⠦🔑 Groq key selected: ...213v
+🤖 Orchestrating... ⠇📦 Groq request: messages=2system_promtp=1771user_prompt=83comined=1854
+My startup has paying customers. How should I scale it into a larger SaaS business?
+🤖 Orchestrating... ⠋🔑 Groq key selected: ...8ZK6
+🤖 Orchestrating... ⠹📦 Groq request: messages=2system_promtp=3949user_prompt=4293comined=8242
+
+=== STARTUP IDEA ===
+SaaS business
+
+=== STARTUP TYPE ===
+SaaS
+
+=== ORIGINAL USER INPUT ===
+My startup has paying customers. How should I scale it into a larger SaaS business?
+
+=== TAVILY MARKET RESEARCH ===
+Source 1:
+URL: https://www.poweredbysearch.com/learn/saas-growth-strategy
+Content: Growth strategies are vital for scaling a SaaS business and achieving business growth. They provide frameworks to navigate competitive markets and achieve sustainable success.
+
+SaaS growth hinges on acquiring,
+🤖 Orchestrating... ⠦🔑 Gemini key selected: ...BBNg
+🤖 Orchestrating... ⠏🔑 Gemini key selected: ...yBLw
+   Actual   : advancement               
+   Result   : ✅ PASS
+   Errors   : 0
+   ----------------------------------------
+
+═══════════════════════ 📊 FOCUSED TEST RESULT ═══════════════════════
+
+  Test     : ADVANCEMENT
+  Expected : advancement
+  Actual   : advancement
+  Result   : ✅ PASS
+══════════════════════════════════════════════════════════════════════
+
+
+══════════════════ 🧪 FOCUSED TEST: IDEA_EXPLORATION ══════════════════
+
+
+🧪 [IDEA_EXPLORATION]
+   Input    : I don't have a startup idea. Give me promising AI startup ideas.
+   Expected : idea_exploration
+🤖 Orchestrating... ⠋🔑 Groq key selected: ...T0rb
+🤖 Orchestrating... ⠹📦 Groq request: messages=2system_promtp=348user_prompt=77comined=425
+User Input : I don't have a startup idea. Give me promising AI startup ideas.
+🤖 Orchestrating... ⠏🔑 Groq key selected: ...fbzY
+🤖 Orchestrating... ⠙📦 Groq request: messages=2system_promtp=563user_prompt=21comined=584
+Startup Idea: unknown
+🤖 Orchestrating... ⠧🔑 Groq key selected: ...213v
+🤖 Orchestrating... ⠙📦 Groq request: messages=2system_promtp=1771user_prompt=64comined=1835
+I don't have a startup idea. Give me promising AI startup ideas.
+🤖 Orchestrating... ⠴🔑 Groq key selected: ...8ZK6
+🤖 Orchestrating... ⠏📦 Groq request: messages=2system_promtp=4080user_prompt=3525comined=7605
+
+STARTUP IDEA: unknown
+
+STARTUP TYPE: unknown
+
+USER INPUT: I don't have a startup idea. Give me promising AI startup ideas.
+
+TAVILY SEARCH RESULTS:
+- URL: https://www.enacton.com/blog/ai-startup-ideas-worth-building
+  Content: Target customer: Independent restaurants and small chains with 1 to 20 locations.
+
+Problem: Most restaurants set menu prices based on intuition and historical cost, missing revenue optimization opportunities that are visible in demand and competitor data.
+
+AI function: Dyn
+🤖 Orchestrating... ⠸🔑 Gemini key selected: ...BBNg
+   Actual   : idea_exploration          
+   Result   : ✅ PASS
+   Errors   : 0
+   ----------------------------------------
+
+═══════════════════════ 📊 FOCUSED TEST RESULT ═══════════════════════
+
+  Test     : IDEA_EXPLORATION
+  Expected : idea_exploration
+  Actual   : idea_exploration
+  Result   : ✅ PASS
+══════════════════════════════════════════════════════════════════════
+
+

@@ -37,7 +37,7 @@ GEMINI_API_KEYS     = [
 
 # ── GROQ API KEYS ────────────────────────────────────────────
 GROQ_API_KEYS       = [
-    os.getenv(f"GROQ_API_KEY_{i}") for i in range(1, 6)
+    os.getenv(f"GROQ_API_KEY_{i}") for i in range(1, 15)
 ]
 GROQ_API_KEYS       = [
     k for k in GROQ_API_KEYS if k
@@ -45,7 +45,7 @@ GROQ_API_KEYS       = [
 
 # ── TAVILY ───────────────────────────────────────────────────
 TAVILY_API_KEYS     = [
-    os.getenv(f"TAVILY_API_KEY_{i}") for i in range(1, 6)
+    os.getenv(f"TAVILY_API_KEY_{i}") for i in range(1, 7)
 ]
 TAVILY_API_KEYS     = [
     k for k in TAVILY_API_KEYS if k

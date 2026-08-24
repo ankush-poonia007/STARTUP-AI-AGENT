@@ -354,54 +354,32 @@ class LLMJudgeAgent:
         mid_user_prompt = f"""
 Evaluate the current workflow using only the supplied data.
 
-==============================
-USER INPUT
-==============================
+USER INPUT:
 {user_input}
 
-==============================
-STARTUP IDEA
-==============================
+STARTUP IDEA:
 {startup_idea}
 
-==============================
-STARTUP TYPE
-==============================
+STARTUP TYPE:
 {startup_type}
 
-==============================
-CLASSIFIED INTENT
-==============================
+CLASSIFIED INTENT:
 {intent}
 
-==============================
-EXECUTION PLAN
-==============================
+EXECUTION PLAN:
 {execution_plan}
 
-==============================
-MARKET DATA
-==============================
+MARKET DATA:
 {market_data}
 
-==============================
-WEB SEARCH RESULTS
-==============================
+WEB SEARCH RESULTS:
 {web_search_results}
 
-==============================
-RAG CONTEXT
-==============================
+RAG CONTEXT:
 {rag_context}
 
-==============================
-MVP SUGGESTIONS
-==============================
+MVP SUGGESTIONS:
 {mvp_suggestions}
-
-==============================
-END OF WORKFLOW DATA
-==============================
 """
 
 
@@ -593,98 +571,58 @@ END OF WORKFLOW DATA
         # ============================================================
 
         final_user_prompt = f"""
-Audit the final report against the supplied workflow source data.
+Audit the final report against the supplied workflow source data. Use only the information provided below.
 
-Use only the information provided below.
-
-==============================
-FINAL REPORT
-==============================
+FINAL REPORT:
 {final_report}
 
-==============================
-USER INPUT
-==============================
+USER INPUT:
 {user_input}
 
-==============================
-STARTUP IDEA
-==============================
+STARTUP IDEA:
 {startup_idea}
 
-==============================
-STARTUP TYPE
-==============================
+STARTUP TYPE:
 {startup_type}
 
-==============================
-PITCH DECK TEXT
-==============================
+PITCH DECK TEXT:
 {pitch_deck_text}
 
-==============================
-JUDGE FEEDBACK
-==============================
+JUDGE FEEDBACK:
 {judge_feedback}
 
-==============================
-MARKET DATA
-==============================
+MARKET DATA:
 {market_data}
 
-==============================
-WEB SEARCH RESULTS
-==============================
+WEB SEARCH RESULTS:
 {web_search_results}
 
-==============================
-RAG CONTEXT
-==============================
+RAG CONTEXT:
 {rag_context}
 
-==============================
-MVP SUGGESTIONS
-==============================
+MVP SUGGESTIONS:
 {mvp_suggestions}
 
-==============================
-TECH RECOMMENDATIONS
-==============================
+TECH RECOMMENDATIONS:
 {tech_recommendations}
 
-==============================
-RISK ANALYSIS
-==============================
+RISK ANALYSIS:
 {risk_analysis}
 
-==============================
-STARTUP SCORE
-==============================
+STARTUP SCORE:
 {startup_score}
 
-==============================
-RECOMMENDATIONS
-==============================
+RECOMMENDATIONS:
 {recommendations}
 
-==============================
-GENERATED IDEAS
-==============================
+GENERATED IDEAS:
 {generated_ideas}
 
-==============================
-NURTURED IDEA
-==============================
+NURTURED IDEA:
 {nurtured_idea}
 
-==============================
-ADVANCEMENT PLAN
-==============================
+ADVANCEMENT PLAN:
 {advancement_plan}
-
-==============================
-END SOURCE DATA
-==============================
 """
 
 

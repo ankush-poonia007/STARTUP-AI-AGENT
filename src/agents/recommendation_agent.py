@@ -250,19 +250,16 @@ class RecommendationAgent:
         # ============================================================
 
         user_prompt = f"""
-Startup Idea:
-{startup_idea}
+Startup Idea: {startup_idea}
 
-Startup Type:
-{startup_type}
+Startup Type: {startup_type}
 
-Highest Risk Flag:
-{highest_risk_flag}
+Highest Risk Flag: {highest_risk_flag}
 
 Risk Analysis:
 {risk_analysis}
 
-Search Results:
+Tavily Search Results:
 {chr(10).join([f"- URL: {r['url']}{chr(10)}  Content: {r['content']}" for r in tavily_response])}
 
 Generate the structured recommendation response now.

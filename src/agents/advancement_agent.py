@@ -195,39 +195,38 @@ class AdvancementAgent:
         # ============================================================
 
         tavily_prompt = f"""
-Find recent market trends, customer needs, competitors, business
-opportunities, and growth signals directly relevant to this startup.
+Find recent, credible, directly relevant market evidence and opportunities for this startup.
 
-STARTUP IDEA:
+[STARTUP IDEA]
 {startup_idea}
 
-STARTUP TYPE:
+[STARTUP TYPE]
 {startup_type}
 
-ORIGINAL USER INPUT:
+[ORIGINAL USER INPUT]
 {user_input}
 
-Use STARTUP IDEA as the primary signal.
+[SEARCH PRIORITY]
+Use STARTUP IDEA as the primary opportunity signal.
+Use STARTUP TYPE for industry/category context.
+Use ORIGINAL USER INPUT to preserve the user's specific problem, target customer, constraints, and intended direction.
 
-Use STARTUP TYPE to identify relevant industry and category context.
-
-Use ORIGINAL USER INPUT to preserve the user's specific problem,
-customer, constraints, and intended direction.
-
-Focus specifically on:
-- The startup's target customers
-- The problem being solved
-- Existing competitors and alternatives
-- Market opportunities
-- Growth and advancement opportunities
+Search for evidence covering:
+- Target customers and unmet needs
+- Problem severity and demand
+- Competitors and alternatives
+- Market and growth opportunities
 - Relevant business models
 - Distribution and partnership opportunities
-- Scaling opportunities
+- Product/business advancement and scaling opportunities
 
-Return relevant sources with their URLs and supporting content.
+[QUALITY]
+Prefer recent, credible, authoritative, directly relevant sources.
+Avoid results that merely mention the same technology, industry, or audience without supporting the actual startup opportunity.
 
-Prefer recent, credible, and directly relevant sources.
-Avoid unrelated results that only mention the same technology or audience.
+[OUTPUT]
+Return relevant sources with original URLs and supporting content.
+Preserve URLs exactly; do not invent or modify them.
 """
 
         # ============================================================
@@ -263,45 +262,23 @@ Avoid unrelated results that only mention the same technology or audience.
         # ============================================================
 
         user_prompt = f"""
-Analyze the startup using the complete startup context and latest
-market research below.
-
 === STARTUP IDEA ===
 {startup_idea}
-=== END STARTUP IDEA ===
 
 === STARTUP TYPE ===
 {startup_type}
-=== END STARTUP TYPE ===
 
 === ORIGINAL USER INPUT ===
 {user_input}
-=== END ORIGINAL USER INPUT ===
 
 === TAVILY MARKET RESEARCH ===
 {tavily_context}
-=== END TAVILY MARKET RESEARCH ===
 
-Use STARTUP IDEA as the primary foundation for the advancement analysis.
+Use STARTUP IDEA as the primary foundation. Use STARTUP TYPE for industry context. Use ORIGINAL USER INPUT to preserve the user's intent and constraints. Use TAVILY MARKET RESEARCH as external evidence.
 
-Use STARTUP TYPE as broader industry and category context.
+Identify the strongest practical advancement without replacing the original startup. Support every evidence-based recommendation with relevant Tavily evidence. If evidence is insufficient, mark the recommendation as provisional and requiring validation.
 
-Use ORIGINAL USER INPUT to preserve the user's original problem,
-intent, constraints, and direction.
-
-Use TAVILY MARKET RESEARCH as external evidence.
-
-Identify the strongest practical advancement without replacing
-the original startup with an unrelated opportunity.
-
-Every evidence-based recommendation must be supported by relevant
-Tavily evidence.
-
-If the available evidence is insufficient, clearly identify the
-recommendation as provisional and requiring validation.
-
-Return only the structured output defined by the system prompt.
-"""
+Return only the structured output defined in the system prompt."""
 
         # ============================================================
         # 7. Prepare LLM messages

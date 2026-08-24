@@ -29,106 +29,135 @@ from src.core.exceptions import (
     WorkflowStateError
 )
 
+def _get_workflow_state(args, kwargs):
+    """Resolve workflow_state from keyword or positional arguments."""
+    workflow_state = kwargs.get("workflow_state")
+
+    if workflow_state is not None:
+        return workflow_state
+
+    if len(args) > 1:
+        return args[1]
+
+    print(
+        "\n[DECORATOR DEBUG]"
+        f"\n  args_count: {len(args)}"
+        f"\n  args_types: {[type(arg).__name__ for arg in args]}"
+        f"\n  kwargs: {list(kwargs.keys())}"
+    )
+
+
+    raise WorkflowStateError(
+        "workflow_state was not provided to the decorated agent."
+    )
+
+
+def _get_agent_name(args, func):
+    """Resolve the decorated agent class name safely."""
+    if args:
+        return args[0].__class__.__name__
+
+    return func.__qualname__.split(".")[0]
+
+
 def log_execution(func):
-    
     @wraps(func)
     def wrapper(*args, **kwargs):
-        
+        start_time = time.time()
+
         try:
-            start_time = time.time()
-            workflow_state = args[1]
-            
-            res = func(*args, **kwargs)
-            return res
-        
+            return func(*args, **kwargs)
+
         finally:
-            workflow_state['execution_log'].append(
+            workflow_state = _get_workflow_state(args, kwargs)
+
+            workflow_state["execution_log"].append(
                 {
-                    'agent_name':args[0].__class__.__name__,
-                    'start_time':start_time,
-                    'end_time':time.time()
+                    "agent_name": _get_agent_name(args, func),
+                    "start_time": start_time,
+                    "end_time": time.time(),
                 }
             )
-    
+
     return wrapper
 
 
 def track_timing(func):
-    
     @wraps(func)
-    def wrapper(*args,**kwargs):
-        
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+
         try:
-            start_time = time.time()
-            workflow_state = args[1]
-            
-            res = func(*args,**kwargs)
-            return res
-        
+            return func(*args, **kwargs)
+
         finally:
-            workflow_state['execution_log'].append(
+            workflow_state = _get_workflow_state(args, kwargs)
+
+            workflow_state["execution_log"].append(
                 {
-                    "agent_name":args[0].__class__.__name__,
-                    "execution_time":time.time() - start_time
+                    "agent_name": _get_agent_name(args, func),
+                    "execution_time": time.time() - start_time,
                 }
             )
-            
+
     return wrapper
-        
+
 
 def retry_on_failure(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        retries = 0 
-        
+        retries = 0
+
         while True:
-            
-            try :
-                return func(*args , **kwargs)
-            
+            try:
+                return func(*args, **kwargs)
+
             except (
-                ToolConnectionError,  
-                WorkflowStateError, 
-                ) as e :
-                
+                ToolConnectionError,
+                WorkflowStateError,
+            ) as error:
                 retries += 1
-              
-                
+
                 if retries > MAX_RETRIES:
                     raise AgentExecutionError(
-                        f"Agent failed after {MAX_RETRIES} retries. Original error {str(e)}"
-                    ) from e 
+                        f"Agent failed after {MAX_RETRIES} retries. "
+                        f"Original error: {str(error)}"
+                    ) from error
+
                 time.sleep(MIN_COOLTIME_RETRY)
-            
-            except Exception as e:
-                retries += 1 
-        
+
+            except Exception as error:
+                retries += 1
+
                 if retries > MAX_RETRIES:
                     raise AgentExecutionError(
-                        f"Agent failed after {MAX_RETRIES} retries. Original error {str(e)}"
-                    ) from e 
-                else:
-                    time.sleep(MIN_COOLTIME_RETRY)
-                    
+                        f"Agent failed after {MAX_RETRIES} retries. "
+                        f"Original error: {str(error)}"
+                    ) from error
+
+                time.sleep(MIN_COOLTIME_RETRY)
+
     return wrapper
+
 
 def handle_errors(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        workflow_state = args[1]
+        workflow_state = _get_workflow_state(args, kwargs)
+
         try:
-            return func(*args,**kwargs)
-        
-        except Exception as e :
+            return func(*args, **kwargs)
+
+        except Exception as error:
             workflow_state["errors"].append(
                 {
-                    "agent"    : args[0].__class__.__name__,   # agent class name
-                    "error"    : str(e),   # exception message
-                    "timestamp": datetime.now(timezone.utc).isoformat()    # ISO 8601 format
+                    "agent": _get_agent_name(args, func),
+                    "error": str(error),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             )
             return None
-        
+
     return wrapper
 
 
@@ -153,19 +182,35 @@ if __name__ == "__main__":
         @retry_on_failure
         def run(self, workflow_state):
             self.attempts += 1
-            print(f"[{datetime.now(timezone.utc).isoformat()}] OperationalAgent: Call attempt #{self.attempts}")
+            print(
+                f"[{datetime.now(timezone.utc).isoformat()}] "
+                f"OperationalAgent: Call attempt #{self.attempts}"
+            )
             
             # Simulate a transient Tool connection failure on the first attempt
             if self.attempts < 2:
-                raise ToolConnectionError("Database connection dropped.")
+                raise ToolConnectionError(
+                    "Database connection dropped."
+                )
                 
             return "Task completed successfully!"
 
-    print("--- Executing Standalone Agent System Test ---")
+    print("--- Positional invocation test ---")
     agent = OperationalAgent()
-    output = agent.run(state)
-    
-    print("\n--- Final Workflow Results ---")
-    print(f"Return payload: {output}")
+    print(f"Return payload: {agent.run(state)}")
     print(f"State Logs: {state['execution_log']}")
     print(f"State Errors: {state['errors']}")
+
+    keyword_state = {
+        "execution_log": [],
+        "errors": [],
+    }
+
+    print("\n--- Keyword invocation test ---")
+    keyword_agent = OperationalAgent()
+    print(
+        "Return payload: "
+        + str(keyword_agent.run(workflow_state=keyword_state))
+    )
+    print(f"State Logs: {keyword_state['execution_log']}")
+    print(f"State Errors: {keyword_state['errors']}")

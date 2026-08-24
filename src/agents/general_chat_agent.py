@@ -216,23 +216,11 @@ class GeneralChatAgent:
         # ============================================================
 
         user_prompt = f"""
-STARTUP IDEA:
-{startup_idea if startup_idea else "Not available"}
+STARTUP IDEA: {startup_idea if startup_idea else "Not available"}
+STARTUP TYPE: {startup_type if startup_type else "Not available"}
+USER INPUT: {user_input}
 
-STARTUP TYPE:
-{startup_type if startup_type else "Not available"}
-
-USER INPUT:
-{user_input}
-
-Use the USER INPUT as the primary signal.
-
-Use STARTUP IDEA and STARTUP TYPE only when they are relevant
-to the user's current question.
-
-Do not force startup context into unrelated questions.
-
-Answer the user's question clearly and directly.
+Use USER INPUT as the primary signal. Use STARTUP IDEA and STARTUP TYPE only when relevant to the user's current question. Answer directly.
 """
 
         # ============================================================

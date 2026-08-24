@@ -170,64 +170,55 @@ class MarketResearchAgent:
         # ============================================================
 
         market_size_prompt = f"""
-{startup_idea}
-{startup_type}
-{user_input}
+Startup: {startup_idea}
+Type: {startup_type}
+Context: {user_input}
 
-Research the market specifically for this startup opportunity.
+Find actual competitors and alternatives relevant to this startup.
 
 Search for:
-- India and Pune market size
-- Student food delivery and tiffin market
-- Market growth and CAGR
-- Demand growth
-- Relevant market segments
-- Major market drivers
+- Direct, local, and regional competitors
+- Established platforms serving the same customer
+- Competitor pricing, positioning, and core offering
+- Underserved customer segments and observable market gaps
 
-Prioritize recent, credible sources and evidence directly relevant to
-students, tiffin services, food delivery, and Pune/India.
+Prioritize: real businesses, primary sources, geography and customer-relevant results.
+Exclude: generic industry articles, unrelated companies.
 
-Avoid unrelated industries and generic AI-market results.
 """
 
         demand_prompt = f"""
-{startup_idea}
-{startup_type}
-{user_input}
+Startup: {startup_idea}
+Type: {startup_type}
+Context: {user_input}
 
-Research customer demand specifically for this startup.
+Find funding activity relevant to this startup category.
 
 Search for:
-- Pune college student food demand
-- Student tiffin and meal-service demand
-- Student food budgets and price sensitivity
-- Meal preferences and purchasing behavior
-- Pain points with existing food-delivery options
-- Unmet needs and adoption barriers
-- Exam-season or schedule-related demand patterns
+- Comparable startups that received funding
+- Recent funding rounds, stages, and approximate amounts
+- Investors and business models of funded companies
+- Geographic relevance and recent investment trends
 
-Prioritize evidence about Indian college students and Pune.
-Avoid generic customer-needs articles unrelated to food delivery.
+Prioritize: actual funding announcements, reputable financial publications, startup databases.
+Exclude: generic fundraising advice.
 """
 
         competition_prompt = f"""
-{startup_idea}
-{startup_type}
-{user_input}
+Startup: {startup_idea}
+Type: {startup_type}
+Context: {user_input}
 
-Research the competitive landscape for this startup.
+Find existing solutions for this startup's specific problem.
 
 Search for:
-- Pune student tiffin services
-- Student-focused meal-delivery startups
-- Homestyle meal competitors
-- Swiggy and Zomato alternatives relevant to students
-- Competitor pricing and business models
-- Underserved student segments
-- Market gaps and differentiation opportunities
+- Existing products, services, and how customers currently solve the problem
+- Alternative solutions, core features, and service models
+- Pricing when available, strengths and weaknesses
+- Unserved or underserved needs
 
-Prioritize actual competitors, services, and market evidence.
-Avoid unrelated industries, generic AI companies, and generic business articles.
+Prioritize: solutions relevant to the target customer and geography.
+Exclude: generic technology or business articles.
 """
 
         # ============================================================

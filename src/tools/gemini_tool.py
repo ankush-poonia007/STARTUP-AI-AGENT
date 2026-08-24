@@ -64,13 +64,19 @@ class GeminiTool:
         ToolConnectionError
             When all configured Gemini API keys are exhausted.
         """
+        
+        api_key = self._get_next_key()
+
+        print(
+            f"🔑 Gemini key selected: ...{api_key[-4:]}"
+        )
+
 
         text = [
             chunk["text"]
             for chunk in chunks
         ]
 
-        api_key = self._get_next_key()
 
         client = genai.Client(
             api_key=api_key
@@ -83,6 +89,15 @@ class GeminiTool:
             )
 
         except Exception as error:
+            
+            print(
+                f"❌ Gemini key ...{api_key[-4:]} failed"
+            )
+
+            print(
+                f"   Error: {type(error).__name__}: {error}"
+            )
+            
             status_code = getattr(error, "status_code", None)
             error_code = getattr(error, "code", None)
 
@@ -132,6 +147,10 @@ class GeminiTool:
         """
 
         api_key = self._get_next_key()
+        
+        print(
+            f"🔑 Gemini key selected: ...{api_key[-4:]}"
+        )
 
         client = genai.Client(
             api_key=api_key
@@ -144,6 +163,15 @@ class GeminiTool:
             )
 
         except Exception as error:
+            
+            print(
+                f"❌ Gemini key ...{api_key[-4:]} failed"
+            )
+
+            print(
+                f"   Error: {type(error).__name__}: {error}"
+            )
+                        
             status_code = getattr(error, "status_code", None)
             error_code = getattr(error, "code", None)
 

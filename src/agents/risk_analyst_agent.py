@@ -274,45 +274,33 @@ class RiskAnalystAgent:
         # ============================================================
 
         user_prompt = f"""
-Analyze the startup using the following evidence according to the system instructions.
+Analyze the startup below and identify material risks per your system instructions.
 
 === STARTUP IDEA ===
 {startup_idea}
-=== END STARTUP IDEA ===
 
 === STARTUP TYPE ===
 {startup_type}
-=== END STARTUP TYPE ===
 
-=== START MARKET DATA ===
+=== MARKET DATA ===
 {market_data}
-=== END MARKET DATA ===
 
-=== START MVP SUGGESTIONS ===
+=== MVP SUGGESTIONS ===
 {mvp_suggestions}
-=== END MVP SUGGESTIONS ===
 
-=== START RAG CONTEXT / PITCH DECK ===
+=== RAG CONTEXT / PITCH DECK ===
 {rag_context_text}
-=== END RAG CONTEXT / PITCH DECK ===
 
-Use STARTUP IDEA as the primary definition of the startup being evaluated.
+Source usage:
+- STARTUP IDEA: primary startup definition.
+- STARTUP TYPE: industry/category context only.
+- MARKET DATA: external evidence for market, customer, competitor, and trend risks.
+- MVP SUGGESTIONS: concrete product scope — evaluate feature-level risks against actual features here.
+- RAG CONTEXT: startup-specific evidence; compare against MARKET DATA where both are relevant; do not treat as verified fact.
 
-Use STARTUP TYPE as the broader industry and category context.
-
-Use MARKET DATA for external market, customer, competitor, trend, and ecosystem evidence.
-
-Use MVP SUGGESTIONS as the concrete product scope whose risks must be evaluated.
-
-Use RAG CONTEXT when it provides relevant startup-specific evidence such as product assumptions, target users, business model, technical dependencies, operational constraints, or pitch-deck claims.
-
-Clearly distinguish evidence-supported risks from assumptions that require validation.
-
-Compare relevant RAG CONTEXT claims against MARKET DATA when both contain relevant information.
-
-Identify material feature-level risks, cross-cutting risks, and the single highest business risk.
-
-Do not invent facts, statistics, competitors, regulations, technical requirements, or URLs.
+Distinguish evidence-supported risks from assumptions requiring validation.
+Identify: material feature-level risks, material cross-cutting risks, and the single highest business risk.
+Do not fabricate facts, statistics, competitors, regulations, technical requirements, or URLs.
 """
 
         # ============================================================

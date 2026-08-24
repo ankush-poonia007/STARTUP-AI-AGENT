@@ -213,19 +213,9 @@ class ReportWriterAgent:
         # ==============================================================
 
         user_prompt = f"""
-Generate the final BizRadar startup analysis report using ONLY the
-workflow data provided below.
+Generate the final BizRadar startup analysis report using only the supplied workflow data.
 
-The supplied workflow outputs are the complete source of truth.
-
-Do not use external knowledge.
-Do not perform additional research.
-Do not invent facts, statistics, competitors, technologies,
-recommendations, market claims, scores, risks, or conclusions.
-
-==================================================
-STARTUP CONTEXT
-==================================================
+=== STARTUP CONTEXT ===
 
 STARTUP IDEA:
 {report_data["startup_idea"]}
@@ -236,121 +226,44 @@ STARTUP TYPE:
 USER INPUT:
 {report_data["user_input"]}
 
-IMPORTANT STARTUP-CONTEXT RULE:
-
-STARTUP IDEA and STARTUP TYPE are provided ONLY to identify and
-frame the startup being reported.
-
-They are NOT instructions to generate, improve, reinterpret,
-evaluate, expand, redesign, or strategize about the startup.
-
-Do NOT derive new substantive information from STARTUP IDEA or
-STARTUP TYPE alone.
-
-Do NOT create new:
-
-- Facts
-- Market claims
-- Customer claims
-- Recommendations
-- Strategies
-- Risks
-- Features
-- Business models
-- Technical decisions
-- Conclusions
-- Metrics
-- Assumptions
-
-from STARTUP IDEA or STARTUP TYPE.
-
-If information is absent from the workflow outputs below,
-do not infer it from STARTUP IDEA or STARTUP TYPE.
-
-Instead, preserve the relevant report section and state:
-
-"Not provided in the available workflow data."
-
-STARTUP IDEA and STARTUP TYPE exist only to prevent the report
-from being framed around the wrong startup.
-
-==================================================
-PITCH DECK TEXT
-==================================================
+=== PITCH DECK TEXT ===
 {report_data["pitch_deck_text"]}
 
-==================================================
-MARKET DATA
-==================================================
+=== MARKET DATA ===
 {report_data["market_data"]}
 
-==================================================
-WEB SEARCH RESULTS
-==================================================
+=== WEB SEARCH RESULTS ===
 {report_data["web_search_results"]}
 
-==================================================
-RAG CONTEXT
-==================================================
+=== RAG CONTEXT ===
 {
     report_data["rag_context"]
     if report_data["rag_context"] != "[]"
     else "Not Provided"
 }
 
-==================================================
-MVP SUGGESTIONS
-==================================================
+=== MVP SUGGESTIONS ===
 {report_data["mvp_suggestions"]}
 
-==================================================
-TECH RECOMMENDATIONS
-==================================================
+=== TECH RECOMMENDATIONS ===
 {report_data["tech_recommendations"]}
 
-==================================================
-RISK ANALYSIS
-==================================================
+=== RISK ANALYSIS ===
 {report_data["risk_analysis"]}
 
-==================================================
-STARTUP SCORE
-==================================================
+=== STARTUP SCORE ===
 {report_data["startup_score"]}
 
-==================================================
-IMPROVEMENT RECOMMENDATIONS
-==================================================
+=== IMPROVEMENT RECOMMENDATIONS ===
 {report_data["recommendations"]}
 
-==================================================
-NURTURED IDEA
-==================================================
+=== NURTURED IDEA ===
 {report_data["nurtured_idea"]}
 
-==================================================
-ADVANCEMENT PLAN
-==================================================
+=== ADVANCEMENT PLAN ===
 {report_data["advancement_plan"]}
 
-==================================================
-END WORKFLOW DATA
-==================================================
-
-Assemble the supplied information into the required eight-section
-Markdown startup analysis report.
-
-Preserve meaningful information and supplied citations.
-
-Do not add facts, assumptions, recommendations, or external knowledge.
-
-Remember:
-
-STARTUP IDEA = report identity/context only.
-
-STARTUP TYPE = report category/context only.
-
-ALL substantive report content must come from the supplied workflow outputs.
+=== END WORKFLOW DATA ===
 """
 
         # ==============================================================
