@@ -183,30 +183,22 @@ class NurturingAgent:
         # ============================================================
 
         user_prompt = f"""
-Refine the startup opportunity using the following information.
+Refine the startup opportunity using the information below.
 
 === USER INPUT ===
 {user_input}
-=== END USER INPUT ===
 
 === STARTUP DATA ===
-Startup Idea :
-{startup_idea}
-
-Startup Type :
-{startup_type}
-=== END STARTUP DATA ===
+Startup Idea: {startup_idea}
+Startup Type: {startup_type}
 
 === RECOMMENDATIONS ===
 {recommendations}
-=== END RECOMMENDATIONS ===
 
 === MARKET DATA ===
 {market_data}
-=== END MARKET DATA ===
 
-Analyze the user's original intent and the available market evidence.
-Then produce the structured startup refinement using the required format.
+Analyze the user's original intent and the available evidence. Produce the structured startup refinement using the required output format.
 """
 
         # ============================================================

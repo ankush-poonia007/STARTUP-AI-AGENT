@@ -245,69 +245,56 @@ class IdeaGenerationAgent:
         # ============================================================
 
         tavily_prompt = f"""
-Find recent, credible, and directly relevant market evidence that can help identify
-and evaluate startup opportunities related to the provided startup context.
+[ROLE]
+You are a market-evidence search agent for a startup analysis system.
 
-USER INPUT:
-{user_input}
+[OBJECTIVE]
+Find recent, credible, directly relevant evidence that reveals or validates market opportunities related to the supplied startup context.
 
-STARTUP INFORMATION:
+[INPUT]
+- USER INPUT: {user_input}
+- STARTUP IDEA: {startup_idea}
+- STARTUP TYPE: {startup_type}
 
-Startup Idea:
-{startup_idea}
+Use STARTUP IDEA as the primary opportunity definition and STARTUP TYPE as industry/category context. Search the actual opportunity/customer problem, not the generic industry.
 
-Startup Type:
-{startup_type}
-
-Search specifically for evidence related to the actual opportunity space described
-above.
-
-Prioritize evidence that can support a concrete market_signal, such as:
-
-- Specific market-size figures
-- Specific growth percentages or rates
-- Revenue figures
-- Customer or user adoption numbers
-- Measured customer behavior
-- Documented demand
-- Specific customer pain points
-- Documented unmet needs
-- Product adoption trends
+[EVIDENCE TARGETS]
+Prioritize concrete, measurable signals:
+- Market size, growth, or revenue
+- Customer/user adoption
+- Measured customer behavior or demand
+- Specific pain points or unmet needs
+- Product/adoption trends
+- Competitor/product developments
 - Relevant industry events
-- Regulatory or policy changes creating opportunities
-- Relevant competitor or product developments
-- Specific emerging market opportunities
+- Regulatory/policy changes creating opportunities
+- Emerging market opportunities
 
-The evidence must be directly relevant to the startup idea or a clearly related
-customer problem.
+A signal is useful only when it supports a specific opportunity relevant to the startup or a clearly related customer problem.
 
-Do NOT prioritize generic articles about:
+[SEARCH QUALITY]
+Prefer, in order:
+1. Recent sources
+2. Credible/authoritative sources
+3. Primary sources
+4. Sources containing measurable evidence
+5. Sources directly relevant to the target customer/problem/market
 
-- Broad technology growth
-- Generic AI trends
-- General startup trends
+Search broadly enough to identify meaningfully different opportunities, but reject irrelevant evidence.
+
+[EXCLUDE]
+Do not prioritize:
+- Generic AI/technology growth
+- Broad startup trends
 - Vague market optimism
 - Technology popularity without business relevance
 
-A growing industry or technology is useful only when the evidence can help support
-a specific startup opportunity within that industry.
+Industry or technology growth is relevant only when it supports a specific startup opportunity.
 
-Prefer:
+[OUTPUT]
+Return multiple relevant search results containing useful evidence and their original URLs.
 
-1. Recent sources
-2. Credible sources
-3. Primary or authoritative sources
-4. Sources containing concrete statistics or measurable evidence
-5. Sources directly related to the target customer, problem, or market
-
-Search broadly enough to discover multiple meaningfully different opportunities,
-but keep the evidence relevant to the startup context.
-
-Return multiple relevant search results with their original URLs and useful content.
-
-Preserve the original source URLs exactly.
-
-Do not invent, modify, shorten, or combine URLs.
+Preserve source URLs exactly. Never invent, modify, shorten, combine, or guess URLs.
 """
 
         # ============================================================
@@ -329,29 +316,20 @@ Do not invent, modify, shorten, or combine URLs.
         # ============================================================
 
         user_prompt = f"""
-STARTUP INFORMATION:
+STARTUP IDEA: {startup_idea}
 
-Startup Idea:
-{startup_idea}
+STARTUP TYPE: {startup_type}
 
-Startup Type:
-{startup_type}
-
-USER INPUT:
-{user_input}
+USER INPUT: {user_input}
 
 TAVILY SEARCH RESULTS:
-
 {chr(10).join(
     f"- URL: {result['url']}\n"
     f"  Content: {result['content']}"
     for result in tavily_response
 )}
 
-Evaluate the opportunities in the supplied search results using the startup
-information and the system instructions.
-
-Return the required ranked JSON array only.
+Evaluate opportunities in the supplied search results using the startup context and system instructions. Return the ranked JSON object only.
 """
 
         # ============================================================

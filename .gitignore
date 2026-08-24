@@ -41,3 +41,5 @@ build/
 *.egg-info/tempCodeRunnerFile.py 
 src/rag/tempCodeRunnerFile.py 
 data/chroma_db/ 
+
+debugging_roadmap.md

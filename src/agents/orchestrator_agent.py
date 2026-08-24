@@ -93,12 +93,7 @@ from src.agents.workflow_state import workflow_state as STATE_SCHEMA
 
 
 from src.core.exceptions import WorkflowStateError
-from src.core.decorators import (
-    log_execution,
-    handle_errors,
-    track_timing,
-    retry_on_failure
-)
+
 
 from src.config.settings import GEMINI_LITE_MODEL
 
@@ -147,10 +142,6 @@ class OrchestratorAgent:
         upstream stage has completed.
     """
 
-    @log_execution
-    @track_timing
-    @retry_on_failure
-    @handle_errors
     def run( 
             self,
             user_input: str,
@@ -303,10 +294,18 @@ class OrchestratorAgent:
         # IntentRouterAgent determines the user's intent and creates
         # the execution plan that controls the remaining pipeline.
 
-        workflow_state = (
-            AGENT_REGISTRY["IntentRouterAgent"]
-            .run(workflow_state=workflow_state)
+        result = (
+            AGENT_REGISTRY["IntentRouterAgent"].run(
+                workflow_state
+            )
         )
+        
+        if result is None:
+            raise WorkflowStateError(
+                f"IntentRouterAgent returned None instead of workflow_state."
+            )
+            
+        workflow_state = result
 
         # ----------------------------------------------------
         # 7. Read execution plan
@@ -370,6 +369,11 @@ class OrchestratorAgent:
                                 completed_future.result()
                             )
 
+                            if result is None:
+                                raise WorkflowStateError(
+                                    f"{agent} returned None instead of workflow_state."
+                                )
+    
                             # Safely merge the result into shared state.
                             with state_lock:
                                 workflow_state.update(result)
@@ -422,11 +426,16 @@ class OrchestratorAgent:
                         )
 
                         # Pass the latest workflow state into the agent.
-                        workflow_state = (
-                            agent_instance.run(
-                                workflow_state
-                            )
+                        result = agent_instance.run(
+                            workflow_state
                         )
+
+                        if result is None:
+                            raise WorkflowStateError(
+                                f"{agent} returned None instead of workflow_state."
+                            )
+
+                        workflow_state = result
 
                     except Exception as e:
 
@@ -468,10 +477,17 @@ class OrchestratorAgent:
 
                 try:
 
-                    workflow_state = (
+                    result = (
                         AGENT_REGISTRY["LLMJudgeAgent"]
-                        .run_mid(workflow_state)
+                        .run_final(workflow_state)
                     )
+
+                    if result is None:
+                        raise WorkflowStateError(
+                            "LLMJudgeAgent.run_final returned None."
+                        )
+
+                    workflow_state = result
 
                 except Exception as e:
 
@@ -508,10 +524,17 @@ class OrchestratorAgent:
 
                 try:
 
-                    workflow_state = (
+                    result = (
                         AGENT_REGISTRY["LLMJudgeAgent"]
                         .run_final(workflow_state)
                     )
+
+                    if result is None:
+                        raise WorkflowStateError(
+                            "LLMJudgeAgent.run_final returned None."
+                        )
+
+                    workflow_state = result
 
                 except Exception as e:
 
@@ -537,30 +560,19 @@ class OrchestratorAgent:
         # Use the lightweight Gemini model to determine whether
         # the user explicitly requested PDF generation.
 
-        prompt = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a deterministic intent classifier. "
-                    "The user input may request a PDF document "
-                    "or export. Respond with ONLY True or False. "
-                    "Do not add any other words, punctuation, "
-                    "or explanation."
-                )
-            },
-            {
-                "role": "user",
-                "content": (
-                    "User request: \""
-                    + workflow_state["user_input"].strip()
-                    + "\"\n\n"
-                    "Return True only if the user explicitly "
-                    "asks to generate, export, download, receive, "
-                    "or create a PDF document or report. "
-                    "Return False otherwise."
-                )
-            }
-        ]
+        prompt = (
+            "You are a deterministic intent classifier. "
+            "The user input may request a PDF document "
+            "or export. Respond with ONLY True or False. "
+            "Do not add any other words, punctuation, "
+            "or explanation.\n\n"
+            "User request: "
+            f"{workflow_state["user_input"].strip()} \n\n"
+            "Return True only if the user explicitly "
+            "asks to generate, export, download, receive, "
+            "or create a PDF document or report. "
+            "Return False otherwise."
+        )
 
         response = gemini_tool.generate_text(
             prompt,

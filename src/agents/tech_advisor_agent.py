@@ -143,67 +143,19 @@ and clearly distinguish evidence from technical inference.
         # ----------------------------------------------------
         
         user_prompt = f"""
-Analyze the following startup information and market data.
-
-Recommend the technology stack according to your system instructions.
+Analyze the startup context below and recommend the technology stack according to the system instructions.
 
 ### STARTUP INFORMATION
 
-Startup Idea:
-{startup_idea}
-
-Startup Type:
-{startup_type}
+**Startup Idea:** {startup_idea}
+**Startup Type:** {startup_type}
 
 ### MARKET DATA
 
 {market_data}
 
-Use STARTUP INFORMATION as the primary product context.
-
-Use MARKET DATA as supporting market and technology evidence.
-
-Determine the startup's actual product requirements, technical requirements, technology needs, and relevant ecosystem considerations.
-
-Do not invent missing business, scale, traffic, compliance, or team-size information.
-
-If team size is available in the supplied context, use it when evaluating every major technology choice.
-
-For every major technology recommendation:
-
-1. Identify the requirement it solves.
-2. Explain why the technology fits this startup.
-3. Explain why it is appropriate for the team's size and current stage.
-4. Consider whether a simpler alternative would be sufficient.
-5. Explain one important trade-off.
-
-Prefer a modular monolith for an early-stage startup unless a concrete requirement justifies greater architectural complexity.
-
-Do not recommend orchestration or workflow frameworks before 10,000 users.
-
-This includes workflow and agent orchestration frameworks such as Temporal, Airflow, Celery, Prefect, Dagster, LangChain, CrewAI, AutoGen, and similar tools.
-
-The 10,000-user threshold does not automatically justify orchestration.
-
-Even after that threshold, recommend orchestration only when a concrete operational requirement justifies its complexity.
-
-Do not recommend Kubernetes, microservices, distributed infrastructure, or other complex deployment architecture merely because the startup may eventually scale.
-
-Use the source URLs provided in MARKET DATA when making externally supported claims.
-
-Do not invent, modify, shorten, or guess URLs.
-
-Clearly distinguish sourced facts from technical inferences and recommendations.
-
-Recommend only technologies that solve actual or reasonably inferred requirements.
-
-Do not fill unnecessary technology categories.
-
-The final stack should be realistic for this startup to build and maintain TODAY.
-
-Return the response using the exact output structure defined in the system instructions.
-
-        """
+Return the response using the exact output structure defined in the system prompt.
+"""
 
         # ----------------------------------------------------
         # 4. Prepare LLM message sequence

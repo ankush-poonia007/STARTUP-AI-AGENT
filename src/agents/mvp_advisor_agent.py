@@ -84,43 +84,42 @@ class MVPAdvisorAgent:
 
         market_data = workflow_state["market_data"]
 
-        rag_context = workflow_state["rag_context"]
+        # rag_context = workflow_state["rag_context"]
 
         # ----------------------------------------------------
         # 2. Normalize RAG context for prompt injection
         # ----------------------------------------------------
 
-        if rag_context:
+        # if rag_context:
 
-            rag_context_text = "\n\n".join(
-                f"Chunk {index}:\n"
-                f"Text: {chunk['text']}\n"
-                f"Metadata: {chunk['metadata']}\n"
-                f"Relevance Score: {chunk['rerank_score']}"
-                + (
-                    f"\nRRF Score: {chunk['rrf_score']}"
-                    if "rrf_score" in chunk
-                    else ""
-                )
-                for index, chunk in enumerate(
-                    rag_context,
-                    start=1
-                )
-            )
+        #     rag_context_text = "\n\n".join(
+        #         f"Chunk {index}:\n"
+        #         f"Text: {chunk['text']}\n"
+        #         f"Metadata: {chunk['metadata']}\n"
+        #         f"Relevance Score: {chunk['rerank_score']}"
+        #         + (
+        #             f"\nRRF Score: {chunk['rrf_score']}"
+        #             if "rrf_score" in chunk
+        #             else ""
+        #         )
+        #         for index, chunk in enumerate(
+        #             rag_context,
+        #             start=1
+        #         )
+        #     )
 
-        else:
+        # else:
 
-            rag_context_text = (
-                "No relevant pitch-deck context available."
-            )
+        #     rag_context_text = (
+        #         "No relevant pitch-deck context available."
+        #     )
 
         # ----------------------------------------------------
         # 3. Build user prompt
         # ----------------------------------------------------
 
         user_prompt = f"""
-Analyze the following startup context and generate the MVP recommendation
-according to your system instructions.
+Analyze the startup context and produce the MVP recommendation according to the system instructions.
 
 ### STARTUP IDEA
 
@@ -134,24 +133,6 @@ according to your system instructions.
 
 {market_data}
 
-### RAG CONTEXT
-
-{rag_context_text}
-
-Use STARTUP IDEA and STARTUP TYPE to understand the exact startup being
-evaluated.
-
-Use MARKET DATA as the primary source for market, customer, competitor,
-trend, and product evidence.
-
-Use RAG CONTEXT only when it provides relevant startup-specific information
-such as product vision, target users, business model, or existing assumptions.
-
-Preserve and use source URLs provided in the supplied context.
-Do not invent or modify sources.
-
-Clearly distinguish sourced facts from product recommendations.
-Identify unsupported assumptions as requiring validation.
 """
 
         # ----------------------------------------------------

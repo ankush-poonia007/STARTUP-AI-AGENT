@@ -383,7 +383,7 @@ class StartupScorerAgent:
         user_prompt = f"""
 Evaluate the startup using the completed upstream analysis below.
 
-=== STARTUP IDEA === 
+=== STARTUP IDEA ===
 {startup_idea}
 
 === STARTUP TYPE ===
@@ -391,31 +391,23 @@ Evaluate the startup using the completed upstream analysis below.
 
 === MARKET DATA ===
 {market_data}
-=== END MARKET DATA ===
 
 === WEB SEARCH RESULTS ===
 {web_search_results}
-=== END WEB SEARCH RESULTS ===
 
 === RAG CONTEXT / PITCH DECK ===
 {rag_context_text}
-=== END RAG CONTEXT / PITCH DECK ===
 
 === MVP SUGGESTIONS ===
 {mvp_suggestions}
-=== END MVP SUGGESTIONS ===
 
 === TECH RECOMMENDATIONS ===
 {tech_recommendations}
-=== END TECH RECOMMENDATIONS ===
 
 === RISK ANALYSIS ===
 {risk_analysis}
-=== END RISK ANALYSIS ===
 
-Use only the supplied evidence when evaluating the startup.
-
-Return the required JSON assessment using only the supplied evidence.
+Use only the supplied evidence. Return the required JSON object.
 """
 
         # ----------------------------------------------------

@@ -677,60 +677,9 @@ def ingest_pdf(file_path: str) -> list:
 # ── PHASE 1b — EMBED & STORE ──────────────────────────────────
 
 def embed_and_store(new_chunks: list) -> str:
-    """Convert paragraph/window chunks to vectors and store in ChromaDB.
-
-    Sends all chunk texts to Gemini in a single batch API call, pairs each
-    embedding with its source chunk via zip(), and writes all data to ChromaDB.
-    Handles duplicate ingestion gracefully — same document can be re-submitted
-    without crashing.
-
-    Parameters:
-        new_chunks (list) → flat list of chunk dicts from ingest_pdf()
-                            each dict must have keys: "text", "page_number", "file_name"
-
-    Returns:
-        str → human-readable status message (success, duplicate, or connection-error notice)
-
-    Why heartbeat() before ingestion:
-        Verifies ChromaDB connection is live before attempting to write data.
-        Catches database connectivity issues early with a clear error message
-        rather than a cryptic failure mid-ingestion.
-
-    Why single batch embed_content() call:
-        One API call for all chunks is faster and cheaper than one call per chunk.
-        Gemini's embed_content() accepts a list — no need to loop.
-
-    Why gemini-embedding-001:
-        text-embedding-004 returned 404 NOT_FOUND on this API key — unavailable
-        on the v1beta API version used by google-genai SDK v1.75.0.
-        gemini-embedding-001 is the stable production alternative available on free tier.
-
-    Why MD5 hash as chunk ID:
-        Deterministic — same text always produces the same ID.
-        Prevents duplicate entries even when the same PDF is renamed before re-upload.
-        ChromaDB raises DuplicateIDError if any ID already exists — caught below.
-
-    Why zip(new_chunks, response.embeddings):
-        Gemini returns embeddings in the same order as the input texts.
-        zip() maintains this order alignment between source chunks and their vectors.
-
-    Why metadata stores only page_number + file_name (not chunk_index):
-        file_name is what Phase 4's where={"file_name": ...} filter scopes
-        retrieval by, and page_number is what citations are built from. Storing
-        chunk_index in ChromaDB metadata isn't currently needed downstream —
-        it's used by ingest_pdf() purely to track sliding-window position during
-        chunk construction, not as a retrieval/citation field.
-    """
-
-    # Verify ChromaDB connection before attempting any write operations.
-    # Returns a clear error string instead of crashing mid-ingestion.
-    try:
-        client.heartbeat()
-    except Exception as e:
-        return f"Connection to the database failed: {e}"
-
     
-    
+    client.heartbeat()
+
     # Extract all texts in one pass — passed as batch to Gemini embed_content()
     texts = [item["text"] for item in new_chunks]
 
