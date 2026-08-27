@@ -36,11 +36,11 @@ GEMINI_API_KEYS     = [
 ]
 
 # ── GROQ API KEYS ────────────────────────────────────────────
-GROQ_API_KEYS       = [
-    os.getenv(f"GROQ_API_KEY_{i}") for i in range(1, 6)
+OPEN_ROUTER_API_KEYS       = [
+    os.getenv(f"OPEN_ROUTER_API_KEY_{i}") for i in range(1, 6)
 ]
-GROQ_API_KEYS       = [
-    k for k in GROQ_API_KEYS if k
+OPEN_ROUTER_API_KEYS       = [
+    k for k in OPEN_ROUTER_API_KEYS if k
 ]
 
 # ── TAVILY ───────────────────────────────────────────────────

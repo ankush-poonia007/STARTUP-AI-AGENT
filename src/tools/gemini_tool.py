@@ -11,8 +11,8 @@ Supported use cases:
 
 Current Phase:
     - Uses the configured Gemini API keys through key rotation.
-    - Rotates to the next key when a rate-limit error occurs.
-    - Raises ToolConnectionError when all configured keys are exhausted.
+    - Advances to the next key on every call (round-robin, never exhausts).
+    - Raises ToolConnectionError when the selected key is rate limited.
 
 Agents should interact with Gemini through the shared gemini_tool instance.
 """
@@ -62,7 +62,7 @@ class GeminiTool:
         Raises
         ------
         ToolConnectionError
-            When all configured Gemini API keys are exhausted.
+            When the selected Gemini API key is rate limited.
         """
 
         text = [
@@ -128,7 +128,7 @@ class GeminiTool:
         Raises
         ------
         ToolConnectionError
-            When all configured Gemini API keys are exhausted.
+            When the selected Gemini API key is rate limited.
         """
 
         api_key = self._get_next_key()
