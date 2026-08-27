@@ -1,7 +1,9 @@
 """
 File        : agents/recommendation_agent.py
 Triggered By: full_analysis, nurturing
-Tools       : tavily_tool.py + groq_tool.py
+# Claude: prev -> Tools       : tavily_tool.py + groq_tool.py
+# Phase 5 migrated the generation call to Gemini; Tavily is still used.
+Tools       : tavily_tool.py + gemini_tool.py
 
 Input:
     workflow_state["startup_idea"]
@@ -126,7 +128,7 @@ class RecommendationAgent:
     RECOMMENDATION_RESPONSE_FORMAT = {
         "type": "json_schema",
         "json_schema": {
-            "name": "startup_recommendations",
+            "name": "recommendation_response",
             "strict": True,
             "schema": {
                 "type": "object",
@@ -271,12 +273,12 @@ Generate the structured recommendation response now.
 
         messages = [
             {
-                "role": "system",
-                "content": system_prompt
+                "role":"system",
+                "content":system_prompt
             },
             {
-                "role": "user",
-                "content": user_prompt
+                "role":"user",
+                "content":user_prompt
             }
         ]
 
@@ -284,11 +286,10 @@ Generate the structured recommendation response now.
         # 7. Generate structured recommendations
         # ============================================================
 
-        groq_response = groq_tool.generate_text(
+        response = groq_tool.generate_text(
             messages=messages,
             response_format=self.RECOMMENDATION_RESPONSE_FORMAT,
-            include_reasoning=False,
-            reasoning_effort="high"
+            reasoning_effort="high",
         )
 
         # ============================================================
@@ -296,7 +297,7 @@ Generate the structured recommendation response now.
         # ============================================================
 
         data = json.loads(
-            groq_response
+            response
         )
 
         # ============================================================

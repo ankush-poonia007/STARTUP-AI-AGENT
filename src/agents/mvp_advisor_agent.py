@@ -1,7 +1,9 @@
 """
 File        : agents/mvp_advisor_agent.py
 Triggered By: full_analysis, partial_idea
-Tools       : groq_tool.py
+# Claude: prev -> Tools       : groq_tool.py
+# Phase 5 migrated this agent to Gemini but left the docstring on Groq.
+Tools       : gemini_tool.py
 Input       : workflow_state["market_data"] + workflow_state["rag_context"]
 Output      : workflow_state["mvp_suggestions"]
 
@@ -143,14 +145,15 @@ Analyze the startup context and produce the MVP recommendation according to the 
 
         messages = [
             {
-                "role": "system",
-                "content": system_prompt
+                "role":"system",
+                "content":system_prompt
             },
             {
-                "role": "user",
-                "content": user_prompt
+                "role":"user",
+                "content":user_prompt
             }
         ]
+
 
         # ----------------------------------------------------
         # 5. Generate MVP recommendation

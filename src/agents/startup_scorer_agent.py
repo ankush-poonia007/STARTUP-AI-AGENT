@@ -1,7 +1,9 @@
 """
 File        : agents/startup_scorer_agent.py
 Triggered By: full_analysis
-Tools       : groq_tool.py
+# Claude: prev -> Tools       : groq_tool.py
+# Phase 5 migrated this agent to Gemini but left the docstring on Groq.
+Tools       : gemini_tool.py
 
 Input:
     workflow_state["market_data"]
@@ -431,9 +433,8 @@ Use only the supplied evidence. Return the required JSON object.
 
         response = groq_tool.generate_text(
             messages=messages,
-            response_format=self.STARTUP_SCORE_RESPONSE_FORMAT,
-            include_reasoning=False,
             reasoning_effort="high",
+            response_format=self.STARTUP_SCORE_RESPONSE_FORMAT,
             
         )
 

@@ -1,7 +1,9 @@
 """
 File        : agents/tech_advisor_agent.py
 Triggered By: full_analysis, partial_idea
-Tools       : groq_tool.py
+# Claude: prev -> Tools       : groq_tool.py
+# Phase 5 migrated this agent to Gemini but left the docstring on Groq.
+Tools       : gemini_tool.py
 Input       : workflow_state["startup_idea"]
              + workflow_state["startup_type"]
              + workflow_state["market_data"]
@@ -163,12 +165,12 @@ Return the response using the exact output structure defined in the system promp
 
         messages = [
             {
-                "role": "system",
-                "content": system_prompt
+                "role":"system",
+                "content":system_prompt
             },
             {
-                "role": "user",
-                "content": user_prompt
+                "role":"user",
+                "content":user_prompt
             }
         ]
 

@@ -11,8 +11,8 @@ Supported use cases:
 
 Current Phase:
     - Uses the configured Gemini API keys through key rotation.
-    - Rotates to the next key when a rate-limit error occurs.
-    - Raises ToolConnectionError when all configured keys are exhausted.
+    - Advances to the next key on every call (round-robin, never exhausts).
+    - Raises ToolConnectionError when the selected key is rate limited.
 
 Agents should interact with Gemini through the shared gemini_tool instance.
 """
@@ -62,21 +62,15 @@ class GeminiTool:
         Raises
         ------
         ToolConnectionError
-            When all configured Gemini API keys are exhausted.
+            When the selected Gemini API key is rate limited.
         """
-        
-        api_key = self._get_next_key()
-
-        print(
-            f"🔑 Gemini key selected: ...{api_key[-4:]}"
-        )
-
 
         text = [
             chunk["text"]
             for chunk in chunks
         ]
 
+        api_key = self._get_next_key()
 
         client = genai.Client(
             api_key=api_key
@@ -89,15 +83,6 @@ class GeminiTool:
             )
 
         except Exception as error:
-            
-            print(
-                f"❌ Gemini key ...{api_key[-4:]} failed"
-            )
-
-            print(
-                f"   Error: {type(error).__name__}: {error}"
-            )
-            
             status_code = getattr(error, "status_code", None)
             error_code = getattr(error, "code", None)
 
@@ -143,14 +128,10 @@ class GeminiTool:
         Raises
         ------
         ToolConnectionError
-            When all configured Gemini API keys are exhausted.
+            When the selected Gemini API key is rate limited.
         """
 
         api_key = self._get_next_key()
-        
-        print(
-            f"🔑 Gemini key selected: ...{api_key[-4:]}"
-        )
 
         client = genai.Client(
             api_key=api_key
@@ -163,15 +144,6 @@ class GeminiTool:
             )
 
         except Exception as error:
-            
-            print(
-                f"❌ Gemini key ...{api_key[-4:]} failed"
-            )
-
-            print(
-                f"   Error: {type(error).__name__}: {error}"
-            )
-                        
             status_code = getattr(error, "status_code", None)
             error_code = getattr(error, "code", None)
 

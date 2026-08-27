@@ -486,7 +486,6 @@ class PipelineReporter:
             char="─",
         )
 
-        print()
 
     def _display_agent_status(
         self,
@@ -1116,9 +1115,26 @@ class IntegrationTestRunner:
                     "",
                 )
 
+                # Claude: added the errors read. run_all was the only pass
+                # predicate missing the error gate that run_focused (line
+                # ~994) and case_result (line ~769) both apply.
+                errors = workflow_state.get("errors", [])
+
+                # Claude: prev -> intent match was the ONLY criterion here:
+                #
+                #     passed = (
+                #         actual_intent
+                #         == active_case.expected_intent
+                #     )
+                #
+                # A run could therefore be counted as passed while carrying
+                # a full error list. The suite reported "Passed : 4" on a
+                # run where all 7 cases had in fact failed, because the
+                # per-case renderer applied the gate and this tally did not.
                 passed = (
                     actual_intent
                     == active_case.expected_intent
+                    and not errors
                 )
 
                 for message in self.reporter.case_result(

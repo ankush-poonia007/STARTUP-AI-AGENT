@@ -10,8 +10,8 @@ Supported use cases:
 
 Current Phase:
     - Uses the configured Tavily API keys through key rotation.
-    - Rotates to the next key when a rate-limit error occurs.
-    - Raises ToolConnectionError when all configured keys are exhausted.
+    - Advances to the next key on every call (round-robin, never exhausts).
+    - Raises ToolConnectionError when the selected key is rate limited.
 
 Agents should interact with Tavily through the shared tavily_tool instance.
 """
@@ -59,7 +59,7 @@ class TavilyTool:
         Raises
         ------
         ToolConnectionError
-            When all configured Tavily API keys are exhausted.
+            When the selected Tavily API key is rate limited.
         """
 
         api_key = self._get_next_key()
