@@ -1,7 +1,9 @@
 """
 File        : agents/startup_scorer_agent.py
 Triggered By: full_analysis
-Tools       : groq_tool.py
+# Claude: prev -> Tools       : groq_tool.py
+# Phase 5 migrated this agent to Gemini but left the docstring on Groq.
+Tools       : gemini_tool.py
 
 Input:
     workflow_state["market_data"]
@@ -65,7 +67,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import STARTUP_SCORER_PROMPT
-from src.tools.groq_tool import groq_tool
+from src.tools.gemini_tool import gemini_tool
 
 import json
 
@@ -187,66 +189,57 @@ class StartupScorerAgent:
     """
 
     STARTUP_SCORE_RESPONSE_FORMAT = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "startup_score",
-            "strict": True,
-            "schema": {
+        "type": "object",
+        "properties": {
+            "reasoning": {
+                "type": "string"
+            },
+            "breakdown": {
                 "type": "object",
                 "properties": {
-                    "reasoning": {
-                        "type": "string"
+                    "market": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100
                     },
-                    "breakdown": {
-                        "type": "object",
-                        "properties": {
-                            "market": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 100
-                            },
-                            "mvp": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 100
-                            },
-                            "tech": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 100
-                            },
-                            "risk": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 100
-                            }
-                        },
-                        "required": [
-                            "market",
-                            "mvp",
-                            "tech",
-                            "risk"
-                        ],
-                        "additionalProperties": False
+                    "mvp": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100
                     },
-                    "highest_risk_flag": {
-                        "type": "string",
-                        "enum": [
-                            "market",
-                            "mvp",
-                            "tech",
-                            "risk"
-                        ]
+                    "tech": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100
+                    },
+                    "risk": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100
                     }
                 },
                 "required": [
-                    "reasoning",
-                    "breakdown",
-                    "highest_risk_flag"
-                ],
-                "additionalProperties": False
+                    "market",
+                    "mvp",
+                    "tech",
+                    "risk"
+                ]
+            },
+            "highest_risk_flag": {
+                "type": "string",
+                "enum": [
+                    "market",
+                    "mvp",
+                    "tech",
+                    "risk"
+                ]
             }
-        }
+        },
+        "required": [
+            "reasoning",
+            "breakdown",
+            "highest_risk_flag"
+        ]
     }
     
     @handle_errors
@@ -414,27 +407,21 @@ Use only the supplied evidence. Return the required JSON object.
         # 6. Prepare LLM messages
         # ----------------------------------------------------
 
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": user_prompt
-            }
-        ]
+        messages = (
+            system_prompt +
+            "\n\n" +
+            user_prompt
+        )
 
         # ----------------------------------------------------
         # 7. Generate startup score assessment
         # ----------------------------------------------------
 
-        response = groq_tool.generate_text(
-            messages=messages,
-            response_format=self.STARTUP_SCORE_RESPONSE_FORMAT,
-            include_reasoning=False,
-            reasoning_effort="high",
-            
+        response = gemini_tool.generate_text(
+            user_prompt=messages,
+            json_mode=True,
+            response_schema=self.STARTUP_SCORE_RESPONSE_FORMAT,
+            gemini_model="gemini-3.6-flash"
         )
 
 

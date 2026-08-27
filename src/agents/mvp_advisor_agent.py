@@ -1,7 +1,9 @@
 """
 File        : agents/mvp_advisor_agent.py
 Triggered By: full_analysis, partial_idea
-Tools       : groq_tool.py
+# Claude: prev -> Tools       : groq_tool.py
+# Phase 5 migrated this agent to Gemini but left the docstring on Groq.
+Tools       : gemini_tool.py
 Input       : workflow_state["market_data"] + workflow_state["rag_context"]
 Output      : workflow_state["mvp_suggestions"]
 
@@ -29,7 +31,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import MVP_ADVISOR_PROMPT
-from src.tools.groq_tool import groq_tool
+from src.tools.gemini_tool import gemini_tool
 
 
 class MVPAdvisorAgent:
@@ -141,23 +143,18 @@ Analyze the startup context and produce the MVP recommendation according to the 
 
         system_prompt = MVP_ADVISOR_PROMPT
 
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": user_prompt
-            }
-        ]
+        messages = (
+            system_prompt +
+            "\n\n" +
+            user_prompt
+        )
 
         # ----------------------------------------------------
         # 5. Generate MVP recommendation
         # ----------------------------------------------------
 
-        mvp_response = groq_tool.generate_text(
-            messages=messages
+        mvp_response = gemini_tool.generate_text(
+            user_prompt=messages
         )
 
         # ----------------------------------------------------

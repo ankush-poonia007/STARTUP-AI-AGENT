@@ -1,7 +1,9 @@
 """
 File        : agents/recommendation_agent.py
 Triggered By: full_analysis, nurturing
-Tools       : tavily_tool.py + groq_tool.py
+# Claude: prev -> Tools       : tavily_tool.py + groq_tool.py
+# Phase 5 migrated the generation call to Gemini; Tavily is still used.
+Tools       : tavily_tool.py + gemini_tool.py
 
 Input:
     workflow_state["startup_idea"]
@@ -59,7 +61,7 @@ from src.core.decorators import (
 
 from src.prompts.prompts import RECOMMENDATION_PROMPT
 from src.tools.tavily_tool import tavily_tool
-from src.tools.groq_tool import groq_tool
+from src.tools.gemini_tool import gemini_tool
 
 import json
 
@@ -124,47 +126,39 @@ class RecommendationAgent:
     # ============================================================
 
     RECOMMENDATION_RESPONSE_FORMAT = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "startup_recommendations",
-            "strict": True,
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "recommendations": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "title": {
-                                    "type": "string"
-                                },
-                                "description": {
-                                    "type": "string"
-                                },
-                                "evidence": {
-                                    "type": "string"
-                                },
-                                "linked_weakness": {
-                                    "type": "string"
-                                }
-                            },
-                            "required": [
-                                "title",
-                                "description",
-                                "evidence",
-                                "linked_weakness"
-                            ],
-                            "additionalProperties": False
+        "type": "object",
+        "properties": {
+            "recommendations": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string"
+                        },
+                        "description": {
+                            "type": "string"
+                        },
+                        "evidence": {
+                            "type": "string"
+                        },
+                        "linked_weakness": {
+                            "type": "string"
                         }
-                    }
-                },
-                "required": [
-                    "recommendations"
-                ],
-                "additionalProperties": False
+                    },
+                    "required": [
+                        "title",
+                        "description",
+                        "evidence",
+                        "linked_weakness"
+                    ]
+                }
             }
-        }
+        },
+        "required": [
+            "recommendations"
+        ]
+    
     }
 
     @handle_errors
@@ -269,26 +263,22 @@ Generate the structured recommendation response now.
         # 6. Prepare LLM messages
         # ============================================================
 
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": user_prompt
-            }
-        ]
+        messages = (
+            system_prompt +
+            "\n\n"+
+            user_prompt
+        )
 
         # ============================================================
         # 7. Generate structured recommendations
         # ============================================================
 
-        groq_response = groq_tool.generate_text(
-            messages=messages,
-            response_format=self.RECOMMENDATION_RESPONSE_FORMAT,
-            include_reasoning=False,
-            reasoning_effort="high"
+        response = gemini_tool.generate_text(
+            user_prompt=messages,
+            gemini_model="gemini-3.6-flash",
+            json_mode=True,
+            response_schema=self.RECOMMENDATION_RESPONSE_FORMAT,
+            
         )
 
         # ============================================================
@@ -296,7 +286,7 @@ Generate the structured recommendation response now.
         # ============================================================
 
         data = json.loads(
-            groq_response
+            response
         )
 
         # ============================================================

@@ -15,6 +15,16 @@ MAX_RETRIES         = 3
 API_COOLDOWN_SECONDS = 60
 MIN_COOLTIME_RETRY  = 3
 
+# Claude: added. gemini_tool.generate_text sent no output-token budget, so
+# structured responses could stop at the model default and return truncated
+# JSON that failed to parse in the four structured consumers.
+GEMINI_MAX_OUTPUT_TOKENS = 8192
+
+# Claude: added. groq_tool printed request sizes and 500 characters of the
+# user prompt on every call with no gate. Set GROQ_DEBUG_REQUESTS=1 in .env
+# to re-enable that instrumentation when debugging.
+GROQ_DEBUG_REQUESTS = os.getenv("GROQ_DEBUG_REQUESTS", "") == "1"
+
 # ── RETRIEVAL CONFIG ─────────────────────────────────────────
 DEFAULT_VECTOR_TOP_K = 10
 DEFAULT_RERANK_TOP_K = 3
@@ -36,11 +46,11 @@ GEMINI_API_KEYS     = [
 ]
 
 # ── GROQ API KEYS ────────────────────────────────────────────
-GROQ_API_KEYS       = [
-    os.getenv(f"GROQ_API_KEY_{i}") for i in range(1, 15)
+OPEN_ROUTER_API_KEYS       = [
+    os.getenv(f"OPEN_ROUTER_API_KEY_{i}") for i in range(1, 6)
 ]
-GROQ_API_KEYS       = [
-    k for k in GROQ_API_KEYS if k
+OPEN_ROUTER_API_KEYS       = [
+    k for k in OPEN_ROUTER_API_KEYS if k
 ]
 
 # ── TAVILY ───────────────────────────────────────────────────

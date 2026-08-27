@@ -5,7 +5,9 @@ Triggered By:
     - OrchestratorAgent → run_final()
 
 Tools:
-    - groq_tool.py
+    # Claude: prev -> - groq_tool.py
+    # Phase 5 migrated both checkpoints to Gemini.
+    - gemini_tool.py
 
 Purpose:
     LLMJudgeAgent is the quality-control layer of the BizRadar
@@ -98,7 +100,7 @@ from src.prompts.prompts import (
 )
 
 
-from src.tools.groq_tool import groq_tool
+from src.tools.gemini_tool import gemini_tool
 
 
 class LLMJudgeAgent:
@@ -168,47 +170,39 @@ class LLMJudgeAgent:
     # ==============================================================
 
     MID_RESPONSE_FORMAT = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "llm_judge_mid",
-            "strict": True,
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "judgment": {
-                        "type": "string",
-                        "enum": [
-                            "PASS",
-                            "WARNING",
-                            "FAIL"
-                        ]
-                    },
-                    "reason": {
-                        "type": "string",
-                        "description": (
-                            "Concise evidence-based explanation of the judgment. "
-                            "Do not introduce information not present in the input."
-                        )
-                    },
-                    "issues": {
-                        "type": "array",
-                        "description": (
-                            "Specific evidence-supported workflow problems. "
-                            "Must be empty when judgment is PASS."
-                        ),
-                        "items": {
-                            "type": "string"
-                        }
-                    }
-                },
-                "required": [
-                    "judgment",
-                    "reason",
-                    "issues"
-                ],
-                "additionalProperties": False
+        "type": "object",
+        "properties": {
+            "judgment": {
+                "type": "string",
+                "enum": [
+                    "PASS",
+                    "WARNING",
+                    "FAIL"
+                ]
+            },
+            "reason": {
+                "type": "string",
+                "description": (
+                    "Concise evidence-based explanation of the judgment. "
+                    "Do not introduce information not present in the input."
+                )
+            },
+            "issues": {
+                "type": "array",
+                "description": (
+                    "Specific evidence-supported workflow problems. "
+                    "Must be empty when judgment is PASS."
+                ),
+                "items": {
+                    "type": "string"
+                }
             }
-        }
+        },
+        "required": [
+            "judgment",
+            "reason",
+            "issues"
+        ]
     }
 
 
@@ -217,47 +211,39 @@ class LLMJudgeAgent:
     # ==============================================================
 
     FINAL_RESPONSE_FORMAT = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "llm_judge_final",
-            "strict": True,
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "judgment": {
-                        "type": "string",
-                        "enum": [
-                            "PASS",
-                            "WARNING",
-                            "FAIL"
-                        ]
-                    },
-                    "reason": {
-                        "type": "string",
-                        "description": (
-                            "Concise evidence-based explanation of the final "
-                            "report judgment."
-                        )
-                    },
-                    "issues": {
-                        "type": "array",
-                        "description": (
-                            "Specific evidence-supported problems detected "
-                            "in the final report. Empty when judgment is PASS."
-                        ),
-                        "items": {
-                            "type": "string"
-                        }
-                    }
-                },
-                "required": [
-                    "judgment",
-                    "reason",
-                    "issues"
-                ],
-                "additionalProperties": False
+        "type": "object",
+        "properties": {
+            "judgment": {
+                "type": "string",
+                "enum": [
+                    "PASS",
+                    "WARNING",
+                    "FAIL"
+                ]
+            },
+            "reason": {
+                "type": "string",
+                "description": (
+                    "Concise evidence-based explanation of the final "
+                    "report judgment."
+                )
+            },
+            "issues": {
+                "type": "array",
+                "description": (
+                    "Specific evidence-supported problems detected "
+                    "in the final report. Empty when judgment is PASS."
+                ),
+                "items": {
+                    "type": "string"
+                }
             }
-        }
+        },
+        "required": [
+            "judgment",
+            "reason",
+            "issues"
+        ]
     }
 
 
@@ -387,28 +373,22 @@ MVP SUGGESTIONS:
         # 4. Prepare structured LLM messages
         # ============================================================
 
-        messages = [
-            {
-                "role": "system",
-                "content": LLM_JUDGE_MID_PROMPT
-            },
-            {
-                "role": "user",
-                "content": mid_user_prompt
-            }
-        ]
+        messages = (
+            LLM_JUDGE_MID_PROMPT +
+            "\n\n" +
+            mid_user_prompt
+        )
 
 
         # ============================================================
         # 5. Execute Groq structured judgment
         # ============================================================
 
-        response = groq_tool.generate_text(
-            messages=messages,
-            temperature=0.0,
-            response_format=self.MID_RESPONSE_FORMAT,
-            reasoning_effort="high",
-            include_reasoning=False
+        response = gemini_tool.generate_text(
+            user_prompt=messages,
+            gemini_model="gemini-3.6-flash",
+            json_mode=True,
+            response_schema=self.MID_RESPONSE_FORMAT,
         )
 
 
@@ -434,12 +414,27 @@ MVP SUGGESTIONS:
         # 8. Update LLMJudgeAgent pipeline status
         # ============================================================
 
-        workflow_state["pipeline_status"].setdefault(
-            "LLMJudgeAgent",
-            {}
-        )
-
-        workflow_state["pipeline_status"]["LLMJudgeAgent"]["run_mid"] = (
+        # Claude: prev -> LLMJudgeAgent was the ONLY agent writing a nested
+        # dict into pipeline_status, while the other 16 agents, the
+        # orchestrator, and handle_errors all write a flat string:
+        #
+        #     workflow_state["pipeline_status"].setdefault(
+        #         "LLMJudgeAgent",
+        #         {}
+        #     )
+        #
+        #     workflow_state["pipeline_status"]["LLMJudgeAgent"]["run_mid"] = (
+        #         "success"
+        #     )
+        #
+        # Two incompatible shapes on one key meant order decided the
+        # outcome: a flat write first made setdefault return a str and the
+        # subscript assignment raised "TypeError: 'str' object does not
+        # support item assignment"; a nested write first was silently
+        # destroyed by the next flat write.
+        #
+        # Claude: now -> flat key, matching every other writer.
+        workflow_state["pipeline_status"]["LLMJudgeAgent.run_mid"] = (
             "success"
         )
 
@@ -630,28 +625,23 @@ ADVANCEMENT PLAN:
         # 4. Prepare structured LLM messages
         # ============================================================
 
-        messages = [
-            {
-                "role": "system",
-                "content": LLM_JUDGE_FINAL_PROMPT
-            },
-            {
-                "role": "user",
-                "content": final_user_prompt
-            }
-        ]
+        messages = (
+            LLM_JUDGE_FINAL_PROMPT +
+            "\n\n" +
+            final_user_prompt
+        )
+    
 
 
         # ============================================================
         # 5. Execute Groq structured judgment
         # ============================================================
 
-        response = groq_tool.generate_text(
-            messages=messages,
-            temperature=0.0,
-            response_format=self.FINAL_RESPONSE_FORMAT,
-            reasoning_effort="high",
-            include_reasoning=False
+        response = gemini_tool.generate_text(
+            user_prompt=messages,
+            gemini_model="gemini-3.6-flash",
+            json_mode=True,
+            response_schema=self.FINAL_RESPONSE_FORMAT,
         )
 
 
@@ -677,12 +667,20 @@ ADVANCEMENT PLAN:
         # 8. Update LLMJudgeAgent pipeline status
         # ============================================================
 
-        workflow_state["pipeline_status"].setdefault(
-            "LLMJudgeAgent",
-            {}
-        )
-
-        workflow_state["pipeline_status"]["LLMJudgeAgent"]["run_final"] = (
+        # Claude: prev -> nested dict write, same incompatible shape as the
+        # run_mid checkpoint above:
+        #
+        #     workflow_state["pipeline_status"].setdefault(
+        #         "LLMJudgeAgent",
+        #         {}
+        #     )
+        #
+        #     workflow_state["pipeline_status"]["LLMJudgeAgent"]["run_final"] = (
+        #         "success"
+        #     )
+        #
+        # Claude: now -> flat key, matching every other writer.
+        workflow_state["pipeline_status"]["LLMJudgeAgent.run_final"] = (
             "success"
         )
 

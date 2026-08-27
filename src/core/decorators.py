@@ -23,10 +23,12 @@ import time
 from functools import wraps
 from datetime import datetime, timezone
 from src.config.settings import MAX_RETRIES, MIN_COOLTIME_RETRY
-from src.core.exceptions import ( 
+from src.core.exceptions import (
     AgentExecutionError,
     ToolConnectionError,
-    WorkflowStateError
+    WorkflowStateError,
+    # Claude: added import for the new fail-fast branch in retry_on_failure.
+    NonRetryableError
 )
 
 def _get_workflow_state(args, kwargs):
@@ -112,6 +114,18 @@ def retry_on_failure(func):
             try:
                 return func(*args, **kwargs)
 
+            # Claude: added this branch ABOVE the two existing ones.
+            # Previously the typed branch and the generic `except Exception`
+            # branch had byte-identical bodies, so nothing could opt out of
+            # retrying. A deterministic HTTP 400 and a local ValueError both
+            # cost 4 attempts, 4 API keys, and 9 seconds before failing.
+            # NonRetryableError now fails on the first attempt.
+            except NonRetryableError as error:
+                raise AgentExecutionError(
+                    f"Agent failed with a non-retryable error. "
+                    f"Original error: {str(error)}"
+                ) from error
+
             except (
                 ToolConnectionError,
                 WorkflowStateError,
@@ -144,19 +158,43 @@ def handle_errors(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         workflow_state = _get_workflow_state(args, kwargs)
+        agent_name = _get_agent_name(args, func)
 
         try:
             return func(*args, **kwargs)
 
         except Exception as error:
-            workflow_state["errors"].append(
+            
+            print(
+                f"❌ {agent_name} failed: "
+                f"{type(error).__name__}: "
+                f"{str(error) or repr(error)}"
+            )
+
+            workflow_state.setdefault("errors", []).append(
                 {
-                    "agent": _get_agent_name(args, func),
-                    "error": str(error),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "agent": agent_name,
+                    "error_type": type(error).__name__,
+                    "error": str(error) or repr(error),
+                    "timestamp": datetime.now(
+                        timezone.utc
+                    ).isoformat(),
                 }
             )
-            return None
+
+
+            # Mark the agent failed so downstream consumers and the
+            # report layer can see the gap instead of silently reading
+            # the STATE_SCHEMA default.
+            workflow_state.setdefault(
+                "pipeline_status", {}
+            )[agent_name] = "failed"
+
+            # Agents mutate workflow_state in place and return it on
+            # success. Returning it here preserves that contract, so
+            # the orchestrator's `workflow_state.update(result)` stays
+            # a harmless no-op instead of a WorkflowStateError.
+            return workflow_state
 
     return wrapper
 

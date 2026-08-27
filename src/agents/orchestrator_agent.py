@@ -92,7 +92,11 @@ from src.agents.web_search_agent import WebSearchAgent
 from src.agents.workflow_state import workflow_state as STATE_SCHEMA
 
 
-from src.core.exceptions import WorkflowStateError
+# Claude: prev -> from src.core.exceptions import WorkflowStateError
+# PipelineInitError added for the execution-plan guard; its docstring
+# ("Raised when IntentRouterAgent fails — stops entire pipeline") is
+# exactly the failure being caught.
+from src.core.exceptions import WorkflowStateError, PipelineInitError
 
 
 from src.config.settings import GEMINI_LITE_MODEL
@@ -300,11 +304,23 @@ class OrchestratorAgent:
             )
         )
         
+        # Claude: prev -> this guard is now dead code. handle_errors was
+        # changed to return workflow_state instead of None, so a failed
+        # IntentRouterAgent no longer trips it and execution continues with
+        # an unrouted state:
+        #
+        #     if result is None:
+        #         raise WorkflowStateError(
+        #             f"IntentRouterAgent returned None instead of workflow_state."
+        #         )
+        #
+        # Claude: now -> keep the None check as a cheap contract assertion,
+        # but validate the plan shape below where the real failure surfaces.
         if result is None:
             raise WorkflowStateError(
                 f"IntentRouterAgent returned None instead of workflow_state."
             )
-            
+
         workflow_state = result
 
         # ----------------------------------------------------
@@ -313,6 +329,22 @@ class OrchestratorAgent:
         # Retrieve the plan selected by IntentRouterAgent.
 
         plan_order = workflow_state["execution_plan"]
+
+        # Claude: added this shape check. On the success path
+        # IntentRouterAgent writes a dict, so plan_order["execution_plan"]
+        # below is valid. When the router FAILS, plan_order is still the
+        # STATE_SCHEMA default [] and line 323 raised an unhandled
+        # "TypeError: list indices must be integers or slices, not str"
+        # that killed the run with no usable diagnostic. Fail here instead,
+        # naming the router and surfacing the errors it recorded.
+        if (
+            not isinstance(plan_order, dict)
+            or not plan_order.get("execution_plan")
+        ):
+            raise PipelineInitError(
+                "IntentRouterAgent did not produce an execution plan. "
+                f"Recorded errors: {workflow_state.get('errors')}"
+            )
 
         # ----------------------------------------------------
         # 8. Execute workflow batches
@@ -390,7 +422,10 @@ class OrchestratorAgent:
                                     "time_stamp": (
                                         datetime.now().isoformat()
                                     ),
-                                    "error": e
+                                    # Claude: prev -> "error": e
+                                    # Raw exception object is not JSON
+                                    # serialisable.
+                                    "error": str(e)
                                 }
                             )
 
@@ -449,7 +484,10 @@ class OrchestratorAgent:
                                 "time_stamp": (
                                     datetime.now().isoformat()
                                 ),
-                                "error": e
+                                # Claude: prev -> "error": e
+                                # Raw exception object is not JSON
+                                # serialisable.
+                                "error": str(e)
                             }
                         )
 
@@ -477,14 +515,26 @@ class OrchestratorAgent:
 
                 try:
 
+                    # Claude: prev -> .run_final(workflow_state)
+                    # This is the MID checkpoint (section 8C), but Phase 5
+                    # changed the call to run_final, which orphaned
+                    # LLMJudgeAgent.run_mid entirely — it was reachable only
+                    # from that module's own __main__. The consequence was a
+                    # mid checkpoint evaluating FINAL-report criteria while
+                    # final_report was still empty, and both checkpoints
+                    # writing judge_feedback["final"] so the second
+                    # overwrote the first. The error handler below still
+                    # labelled this "LLMJudgeAgent.run_mid", confirming the
+                    # original intent.
                     result = (
                         AGENT_REGISTRY["LLMJudgeAgent"]
-                        .run_final(workflow_state)
+                        .run_mid(workflow_state)
                     )
 
                     if result is None:
+                        # Claude: prev -> "LLMJudgeAgent.run_final returned None."
                         raise WorkflowStateError(
-                            "LLMJudgeAgent.run_final returned None."
+                            "LLMJudgeAgent.run_mid returned None."
                         )
 
                     workflow_state = result
@@ -503,7 +553,11 @@ class OrchestratorAgent:
                             "time_stamp": (
                                 datetime.now().isoformat()
                             ),
-                            "error": e
+                            # Claude: prev -> "error": e
+                            # The raw exception object is not JSON
+                            # serialisable, so any attempt to serialise
+                            # workflow_state for a report or PDF failed.
+                            "error": str(e)
                         }
                     )
 
@@ -550,7 +604,9 @@ class OrchestratorAgent:
                             "time_stamp": (
                                 datetime.now().isoformat()
                             ),
-                            "error": e
+                            # Claude: prev -> "error": e
+                            # Raw exception object is not JSON serialisable.
+                            "error": str(e)
                         }
                     )
 
@@ -596,6 +652,16 @@ class OrchestratorAgent:
         # ----------------------------------------------------
         # The orchestrator returns the accumulated state containing
         # all outputs, statuses, errors, and generated reports.
+
+        # Claude: prev -> debug scaffolding that printed the raw error list
+        # to stdout on every run, interleaving with the CLI spinner:
+        #
+        #     print(
+        #         workflow_state["errors"]
+        #     )
+        #
+        # Errors are already recorded in workflow_state["errors"] and
+        # rendered by the reporting layer, so this print added nothing.
 
         return workflow_state
 

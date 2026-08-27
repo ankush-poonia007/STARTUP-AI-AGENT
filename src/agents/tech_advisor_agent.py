@@ -1,7 +1,9 @@
 """
 File        : agents/tech_advisor_agent.py
 Triggered By: full_analysis, partial_idea
-Tools       : groq_tool.py
+# Claude: prev -> Tools       : groq_tool.py
+# Phase 5 migrated this agent to Gemini but left the docstring on Groq.
+Tools       : gemini_tool.py
 Input       : workflow_state["startup_idea"]
              + workflow_state["startup_type"]
              + workflow_state["market_data"]
@@ -44,7 +46,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import TECH_ADVISOR_PROMPT
-from src.tools.groq_tool import groq_tool
+from src.tools.gemini_tool import gemini_tool
 
 
 class TechAdvisorAgent:
@@ -161,23 +163,18 @@ Return the response using the exact output structure defined in the system promp
         # 4. Prepare LLM message sequence
         # ----------------------------------------------------
 
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": user_prompt
-            }
-        ]
+        messages = (
+            system_prompt +
+            "\n\n" +
+            user_prompt
+        )
 
         # ----------------------------------------------------
         # 5. Generate technology recommendations
         # ----------------------------------------------------
 
-        tech_stack_response = groq_tool.generate_text(
-            messages=messages
+        tech_stack_response = gemini_tool.generate_text(
+            user_prompt=messages
         )
 
         # ----------------------------------------------------
