@@ -486,7 +486,6 @@ class PipelineReporter:
             char="─",
         )
 
-        print()
 
     def _display_agent_status(
         self,
