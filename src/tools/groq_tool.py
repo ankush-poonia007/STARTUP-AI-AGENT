@@ -49,7 +49,6 @@ class GroqTool:
         max_completion_tokens: int = 4096,
         response_format: dict | None = None,
         reasoning_effort: str = "low",
-        include_reasoning: bool = True,
         top_p: float | None = None
     ) -> str:
         """
@@ -106,7 +105,6 @@ class GroqTool:
             "max_completion_tokens": max_completion_tokens,
             "reasoning_effort": reasoning_effort,
         }
-            # "include_reasoning": include_reasoning
 
         # ----------------------------------------------------------
         # Optional parameters
