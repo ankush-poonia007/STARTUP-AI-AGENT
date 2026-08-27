@@ -46,7 +46,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import TECH_ADVISOR_PROMPT
-from src.tools.gemini_tool import gemini_tool
+from src.tools.groq_tool import groq_tool
 
 
 class TechAdvisorAgent:
@@ -163,18 +163,23 @@ Return the response using the exact output structure defined in the system promp
         # 4. Prepare LLM message sequence
         # ----------------------------------------------------
 
-        messages = (
-            system_prompt +
-            "\n\n" +
-            user_prompt
-        )
+        messages = [
+            {
+                "role":"system",
+                "content":system_prompt
+            },
+            {
+                "role":"user",
+                "content":user_prompt
+            }
+        ]
 
         # ----------------------------------------------------
         # 5. Generate technology recommendations
         # ----------------------------------------------------
 
-        tech_stack_response = gemini_tool.generate_text(
-            user_prompt=messages
+        tech_stack_response = groq_tool.generate_text(
+            messages=messages
         )
 
         # ----------------------------------------------------

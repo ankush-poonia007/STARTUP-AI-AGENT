@@ -31,7 +31,7 @@ from src.core.decorators import (
 )
 
 from src.prompts.prompts import MVP_ADVISOR_PROMPT
-from src.tools.gemini_tool import gemini_tool
+from src.tools.groq_tool import groq_tool
 
 
 class MVPAdvisorAgent:
@@ -143,18 +143,24 @@ Analyze the startup context and produce the MVP recommendation according to the 
 
         system_prompt = MVP_ADVISOR_PROMPT
 
-        messages = (
-            system_prompt +
-            "\n\n" +
-            user_prompt
-        )
+        messages = [
+            {
+                "role":"system",
+                "content":system_prompt
+            },
+            {
+                "role":"user",
+                "content":user_prompt
+            }
+        ]
+
 
         # ----------------------------------------------------
         # 5. Generate MVP recommendation
         # ----------------------------------------------------
 
-        mvp_response = gemini_tool.generate_text(
-            user_prompt=messages
+        mvp_response = groq_tool.generate_text(
+            messages=messages
         )
 
         # ----------------------------------------------------
