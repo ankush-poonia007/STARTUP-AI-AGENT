@@ -1,12 +1,12 @@
 <div align="center">
 
-# 📓 BizRadar AI — Learning Log
+# 📓 CoFoundr AI — Learning Log
 
 <sub>A personal record of concepts learned, decisions made, mistakes caught, and what comes next. Updated after every meaningful session or milestone.</sub>
 
-[![Phase](https://img.shields.io/badge/Current_Phase-4_In_Progress-blue?style=for-the-badge)]()
+[![Phase](https://img.shields.io/badge/Current_Phase-5_Complete-blue?style=for-the-badge)]()
 [![Phase 3](https://img.shields.io/badge/Phase_3-Complete-brightgreen?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-v4.0.0-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-v5.9.0-orange?style=for-the-badge)]()
 </div>
 
 ---
@@ -23,8 +23,8 @@
 Phase 1 ✅ Complete
 Phase 2 ✅ Complete
 Phase 3 ✅ Complete — Closed
-Phase 4 🔄 In Progress
-Phase 5 📋 Planned
+Phase 4 ✅ Complete
+Phase 5 ✅ Complete — Closed
 Phase 6 📋 Planned
 ```
 
@@ -32,7 +32,7 @@ Phase 6 📋 Planned
 
 ## ✅ Phase 1 Log — Foundation Agent
 
-**Completed:** BizRadar AI v1.0.0
+**Completed:** CoFoundr AI v1.0.0
 
 ### Concepts Learned
 
@@ -58,7 +58,7 @@ Phase 6 📋 Planned
 
 ## ✅ Phase 2 Log — Real Tool Integrations
 
-**Completed:** BizRadar AI v2.0.0
+**Completed:** CoFoundr AI v2.0.0
 
 ### Concepts Learned
 
@@ -89,7 +89,7 @@ Phase 6 📋 Planned
 
 ## ✅ Phase 3 Log — RAG & Document Intelligence
  
-**Completed:** BizRadar AI v3.0.0
+**Completed:** CoFoundr AI v3.0.0
  
 ---
  
@@ -413,7 +413,7 @@ Before starting Phase 4 — complete these:
 
 ## 🔄 Phase 4 Log — Multi-PDF, Stage Gating & RAG Hardening
 
-**Status:** In Progress — BizRadar AI v4.0.0
+**Status:** In Progress — CoFoundr AI v4.0.0
 
 ### 🎯 Milestone
 
@@ -550,21 +550,345 @@ Every single time, self-correction happened once directly challenged with "what'
 
 ---
 
-## 📋 Phase 5 Log — Multi-Agent Architecture
+## ✅ Phase 5 Log --- Multi-Agent Architecture
 
-**Status:** Not Started
+**Completed:** CoFoundr AI v5.8.0
 
-### Concepts To Learn
-- [ ] Orchestrator pattern — coordinator agent that delegates to specialists
-- [ ] Agent communication and handoffs
-- [ ] Shared memory between agents
-- [ ] Specialized agent design — narrow scope, deep focus
-- [ ] Failure handling — what happens when a sub-agent times out
+> Phase 5 progressed from simple responsibility separation to a dynamic, validated, provider-hardened multi-agent system.
 
-### Questions I Have Right Now
-*(Fill in before starting Phase 5)*
+------------------------------------------------------------------------
 
----
+### Session / Release Update v5.0.0 --- Multi-Agent Foundation
+
+#### Concepts Learned
+
+-   [x] **Multi-Agent Architecture** --- One large agent can be decomposed into independent specialist agents with narrow responsibilities.
+-   [x] **Orchestrator Pattern** --- A central orchestrator coordinates agents without performing every specialist task itself.
+-   [x] **Intent Routing** --- User intent determines which workflow path and specialist agents should execute.
+-   [x] **Shared Workflow State** --- Agents communicate through one shared `workflow_state`.
+-   [x] **Agent Independence** --- Specialist agents remain independently callable and testable.
+-   [x] **Tool Isolation** --- Provider and infrastructure tools stay outside agent files and remain reusable.
+-   [x] **Schema Separation** --- `workflow_state.py` contains the communication schema, not business logic.
+-   [x] **Cross-Cutting Concerns** --- Shared error handling belongs in reusable core utilities.
+-   [x] **Zero-Framework Architecture** --- Phase 5 deliberately avoids LangChain, CrewAI, and AutoGen.
+-   [x] **Prompt Centralization** --- LLM-facing prompts stay centralized.
+-   [x] **Mock Workflow State** --- Agents can be tested against controlled state independently.
+
+#### Architecture Decisions Made
+
+  ------------------------------------------------------------------------------------------------
+  Decision                                      Reasoning
+  --------------------------------------------- --------------------------------------------------
+  One agent per responsibility                  Keeps specialist behavior narrow and replaceable
+
+  Agents communicate through `workflow_state`   Creates one predictable communication channel
+
+  Tools remain independent                      Prevents provider logic from leaking into agents
+
+  No agent imports another agent                Prevents cascading dependencies
+
+  Prompts centralized                           Allows behavior changes without editing agents
+
+  Shared core utilities                         Prevents repeated cross-cutting code
+
+  Zero frameworks                               Forces understanding of underlying mechanics
+  ------------------------------------------------------------------------------------------------
+
+#### Key Insight
+
+> Phase 5 changed the unit of architecture from one tool-calling agent to a coordinated team of specialized agents.
+
+------------------------------------------------------------------------
+
+### Session / Release Update v5.1.0 --- Research & Retrieval Agents
+
+#### Concepts Learned
+
+-   [x] **Specialist Research Agents** --- Research responsibilities can be split across dedicated agents.
+-   [x] **Web Research Specialization** --- Web-search work can have its own specialist boundary.
+-   [x] **RAG Agent Ownership** --- Existing hybrid RAG can become a dedicated specialist.
+-   [x] **State-Based Handoffs** --- Research outputs become shared state for downstream agents.
+-   [x] **Legacy Capability Migration** --- Proven Phase 4 functionality can be preserved while ownership changes.
+
+#### What Was Built
+
+  Agent                   Responsibility
+  ----------------------- ------------------------------------------------------
+  `MarketResearchAgent`   Market and competitor research
+  `WebSearchAgent`        Web-search-backed research
+  `RAGAgent`              Document-grounded retrieval using Phase 4 hybrid RAG
+
+#### Key Insight
+
+> Multi-agent migration should preserve proven capabilities while changing ownership and boundaries.
+
+------------------------------------------------------------------------
+
+### Session / Release Update v5.2.0 --- MVP & Technology Advisors
+
+#### Concepts Learned
+
+-   [x] **Downstream Context Consumption** --- Specialists consume upstream evidence through shared state.
+-   [x] **MVP Specialization** --- MVP scope deserves its own reasoning boundary.
+-   [x] **Technology Specialization** --- Architecture and stack recommendations deserve a dedicated specialist.
+-   [x] **Independent Agent Execution** --- Advisors remain callable without direct agent dependencies.
+
+#### What Was Built
+
+  ---------------------------------------------------------------------------------------
+  Agent                               Responsibility
+  ----------------------------------- ---------------------------------------------------
+  `MVPAdvisorAgent`                   MVP feature recommendations
+
+  `TechAdvisorAgent`                  Architecture and technology-stack recommendations
+  ---------------------------------------------------------------------------------------
+
+#### Key Insight
+
+> Shared state lets agents collaborate without creating direct agent-to-agent dependencies.
+
+------------------------------------------------------------------------
+
+### Session / Release Update v5.3.0 --- Risk Analysis & Startup Scoring
+
+#### Concepts Learned
+
+-   [x] **Risk Analysis Specialization** --- Risk assessment can be isolated from other responsibilities.
+-   [x] **Startup Scoring** --- Multiple dimensions can become a structured viability score.
+-   [x] **Score Decomposition** --- Explicit dimensions make a final score interpretable.
+-   [x] **Highest-Risk Identification** --- Scoring can identify the most critical risk.
+-   [x] **State-Based Dependency Management** --- Agents consume workflow evidence without importing agents.
+
+#### What Was Built
+
+  Agent                  Responsibility
+  ---------------------- ----------------------------------
+  `RiskAnalystAgent`     Structured startup risk analysis
+  `StartupScorerAgent`   Startup viability scoring
+
+#### Structured Scoring Dimensions
+
+-   [x] Market
+-   [x] MVP
+-   [x] Technology
+-   [x] Risk
+-   [x] Highest-risk identification
+
+#### Key Insight
+
+> Specialist agents should consume evidence through shared state, not implementation-level dependencies.
+
+------------------------------------------------------------------------
+
+### Session / Release Update v5.4.0 --- Recommendations & Idea Generation
+
+#### Concepts Learned
+
+-   [x] **Recommendation Specialization** --- Recommendations can be separated from analysis.
+-   [x] **Idea Generation Workflows** --- Opportunity exploration deserves a dedicated workflow path.
+-   [x] **Evidence-Grounded Generation** --- Generated opportunities should use available workflow signals.
+-   [x] **Dynamic Workflow Selection** --- Different goals can activate different specialist combinations.
+
+#### What Was Built
+
+  ----------------------------------------------------------------------------------------
+  Agent                               Responsibility
+  ----------------------------------- ----------------------------------------------------
+  `RecommendationAgent`               Evidence-based startup improvement recommendations
+
+  `IdeaGenerationAgent`               Startup opportunity and idea-exploration workflows
+  ----------------------------------------------------------------------------------------
+
+#### Key Insight
+
+> Generation becomes more useful when grounded in evidence already collected by the workflow.
+
+------------------------------------------------------------------------
+
+### Session / Release Update v5.5.0 --- Nurturing, Advancement & General Chat
+
+#### Concepts Learned
+
+-   [x] **Workflow Specialization by User Goal** --- Not every request needs the complete pipeline.
+-   [x] **Nurturing Workflows** --- Startup-development guidance gets its own agent.
+-   [x] **Advancement Workflows** --- Scaling questions get a dedicated path.
+-   [x] **General-Chat Routing** --- Conversational requests can bypass unnecessary analysis.
+-   [x] **Conditional Agent Activation** --- Specialists should run only when relevant.
+
+#### What Was Built
+
+  Agent                Responsibility
+  -------------------- --------------------------------------------
+  `NurturingAgent`     Startup-development and follow-up guidance
+  `AdvancementAgent`   Advancement and scaling guidance
+  `GeneralChatAgent`   Non-analysis conversational requests
+
+#### Key Insight
+
+> Dynamic routing reduces wasted computation by activating only relevant specialists.
+
+------------------------------------------------------------------------
+
+### Session / Release Update v5.6.0 --- Report Writing & PDF Generation
+
+#### Concepts Learned
+
+-   [x] **Report Assembly as a Separate Responsibility** --- Writing differs from researching.
+-   [x] **Output-Layer Separation** --- PDF generation belongs after report assembly.
+-   [x] **Evidence Preservation** --- Report generation consumes workflow evidence.
+-   [x] **Artifact Generation** --- Structured workflows can produce final document artifacts.
+
+#### What Was Built
+
+  ---------------------------------------------------------------------------------------
+  Agent                               Responsibility
+  ----------------------------------- ---------------------------------------------------
+  `ReportWriterAgent`                 Assemble specialist outputs into the final report
+
+  `PDFGeneratorAgent`                 Convert the completed report into a PDF
+  ---------------------------------------------------------------------------------------
+
+#### Key Insight
+
+> The final writer should assemble evidence, not become another hidden research agent.
+
+------------------------------------------------------------------------
+
+### Session / Release Update v5.7.0 --- LLM Judge & Workflow Validation
+
+#### Concepts Learned
+
+-   [x] **LLM-as-a-Judge** --- A separate model call evaluates workflow output.
+-   [x] **Validation Checkpoints** --- Quality can be checked mid-pipeline and finally.
+-   [x] **Structured Judgments** --- `judgment`, `reason`, and `issues` make validation machine-readable.
+-   [x] **PASS/WARNING/FAIL Semantics** --- Validation distinguishes acceptable output, concerns, and failures.
+-   [x] **Validation Separation** --- The judge remains separate from specialist responsibilities.
+-   [x] **Validation as Workflow Data** --- Judge results become workflow validation data.
+
+#### Validation Architecture
+
+``` text
+Specialist outputs
+       ↓
+Mid-pipeline checkpoint
+       ↓
+LLMJudgeAgent
+       ↓
+PASS / WARNING / FAIL
+       ↓
+Continue workflow
+       ↓
+ReportWriterAgent
+       ↓
+Final checkpoint
+       ↓
+LLMJudgeAgent
+```
+
+#### Key Insight
+
+> Quality control is stronger when validation is an explicit workflow stage.
+
+------------------------------------------------------------------------
+
+### Session / Release Update v5.8.0 --- Provider Hardening, API-Key Rotation & Integration Verification
+
+#### Concepts Learned
+
+-   [x] **Provider Abstraction** --- Agents depend on stable tool interfaces, not provider SDK details.
+-   [x] **Generic API-Key Rotation** --- Rotation logic can live in one provider-agnostic utility.
+-   [x] **Stateful Key Rotation** --- Rotation state persists across retry attempts.
+-   [x] **Shared Tool Instances** --- Agents consume shared `groq_tool` / `gemini_tool` instances.
+-   [x] **Large-Context Provider Routing** --- Workloads can move to providers suited to context requirements.
+-   [x] **Structured Output Separation** --- Prompts/messages and response schemas are separate request concerns.
+-   [x] **Workflow Error Propagation** --- Handled failures remain visible in `workflow_state["errors"]`.
+-   [x] **Intent-Based Integration Testing** --- Complete intent paths validate routing and downstream execution.
+-   [x] **Zero-Error Success Criteria** --- Correct intent with recorded errors is not successful execution.
+-   [x] **Provider Failover Architecture** --- Credential recovery belongs in the provider layer.
+
+#### What Was Built
+
+  Component                   Responsibility
+  --------------------------- ------------------------------------------
+  `src/core/key_rotator.py`   Generic API-key rotation and retry state
+  `GroqTool`                  Stateful Groq provider access
+  `GeminiTool`                Stateful Gemini provider access
+  OpenRouter reasoning path   Large-context reasoning workload
+  Integration tests           Intent-path verification
+
+#### Provider Boundary
+
+``` text
+Agent
+  ↓
+Provider Tool
+  ↓
+Key Rotation / Request Construction
+  ↓
+Provider SDK / API
+```
+
+#### Integration Verification
+
+  Intent               Status
+  -------------------- ---------
+  `general_chat`       ✅ PASS
+  `full_analysis`      ✅ PASS
+  `partial_idea`       ✅ PASS
+  `idea_exploration`   ✅ PASS
+  `nurturing`          ✅ PASS
+  `advancement`        ✅ PASS
+  `pdf_request`        ✅ PASS
+
+**Phase 5 functional verification: 7/7 intent paths passed.**
+
+#### Key Insight
+
+> Provider abstraction should isolate provider failures and credentials from agent logic.
+
+------------------------------------------------------------------------
+
+### Phase 5 Completion Criteria --- Verified ✅
+
+-   [x] Shared workflow-state communication established
+-   [x] Orchestrator and intent routing established
+-   [x] Research and retrieval specialists implemented
+-   [x] MVP and technology specialists implemented
+-   [x] Risk analysis and startup scoring implemented
+-   [x] Recommendation and idea-generation workflows implemented
+-   [x] Nurturing, advancement, and general-chat workflows implemented
+-   [x] Report writing and PDF generation separated into output agents
+-   [x] LLM validation checkpoints implemented
+-   [x] Provider abstraction and API-key rotation hardened
+-   [x] Large-context reasoning path moved to OpenRouter
+-   [x] Workflow errors preserved in shared state
+-   [x] Seven intent paths integration-tested
+-   [x] **7/7 Phase 5 intent workflows passed**
+
+### Phase 5 Core Learning Progression
+
+``` text
+Independent agents
+      ↓
+Shared workflow state
+      ↓
+Orchestrator + intent routing
+      ↓
+Specialized research agents
+      ↓
+Specialized analysis agents
+      ↓
+Dynamic intent-specific workflows
+      ↓
+Dedicated report/output layer
+      ↓
+LLM validation checkpoints
+      ↓
+Provider abstraction + failover
+      ↓
+Intent-based integration verification
+```
+
 
 ## 📋 Phase 6 Log — Autonomous Platform
 
@@ -609,6 +933,14 @@ Every single time, self-correction happened once directly challenged with "what'
 | Phase 4 | Prompt-only classification has a non-zero, irreducible error rate — a fourth prompt rewrite is not guaranteed to close a case three rewrites already couldn't |
 | Phase 4 | A "closed" bug from a previous phase is not guaranteed closed — re-verify under the current architecture before assuming continuity |
 | Phase 4 | Reclassifying a bug correctly (quota vs. architecture) changes where it should live in your tracking, not just its priority |
+| Phase 5 | Shared workflow state is the communication contract — direct agent imports create coupling |
+| Phase 5 | Specialization only helps when responsibilities remain narrow |
+| Phase 5 | Dynamic routing should activate only relevant specialists |
+| Phase 5 | Report writing and PDF generation are output concerns, not research concerns |
+| Phase 5 | A judge should validate workflow output, not become another report-generation path |
+| Phase 5 | Provider credentials, retries, and SDK details belong behind tool boundaries |
+| Phase 5 | Integration tests must validate complete intent paths, not isolated agents only |
+| Phase 5 | Correct intent with recorded workflow errors is not successful execution |
 | Phase 4 | Offline evaluation (recall@k against ground truth) is a different category of confidence than live spot-checking — build the evaluator early, not as an afterthought |
 ---
 
@@ -636,23 +968,27 @@ Every single time, self-correction happened once directly challenged with "what'
 | Phase 4 | Proposed merging Stage 3 and Stage 4 print logic without confirming root cause first | Assumed the symptom (double "Stage 3" print) meant the stages should be combined, before checking if it was the gating-retry pattern | Diagnose the actual cause of a printed symptom before proposing a structural merge |
 | Phase 4 | Assumed Bug B (Part 2) was still the same bug after switching to forced-argument-overwrite | New architecture can change adjacent behavior — old diagnosis doesn't automatically transfer | Re-diagnose against the current file, don't assume bug continuity across an architecture change |
 | Phase 4 | Deterministic retry-forcing test designed three sessions running, never built | Kept losing priority to more urgent diagnosis work without an explicit decision to deprioritize it | If something rolls over repeatedly, explicitly decide to build it or drop it — don't let it default-carry forward silently |
+| Phase 5 | Provider-specific rotation risked duplicated recovery logic | Credential recovery was treated as provider-agent behavior | Cross-provider recovery belongs in a reusable provider-layer utility |
+| Phase 5 | Large-context reasoning remained tied to tighter provider limits | Workload requirements were not separated from provider choice | Route workloads according to context and capability requirements |
+| Phase 5 | Structured-output construction mixed prompt data with response schema configuration | Provider request concerns were not cleanly separated | Keep prompt content and schema configuration separate |
+| Phase 5 | Handled agent failures could disappear from downstream validation | Error handling returned control without preserving failure state | Errors must remain observable in shared workflow state |
+| Phase 5 | Integration success could be inferred from intent alone | A correct route could still hide workflow errors | Require expected intent plus zero recorded workflow errors |
 
 ---
 
 ## 📈 Learning Patterns Tracked
 
-| Pattern | Phase 1 | Phase 2 | Phase 3 | Trend |
-|---|---|---|---|---|
-| Jumping to code before reasoning | Frequent | Frequent | 4 times | Improving |
-| Skipping harder questions | — | Noted | 2 times | Needs attention |
-| Answering in fragments not prose | — | — | 3 times | Persistent |
-| Skipping assigned reading | Frequent | Frequent | Improved | Getting better |
-| Copying code without understanding | Frequent | Reduced | Rare | Strong improvement |
-| Flowchart before coding | Not followed | Not followed | Followed | Real change |
-| Jumping to fixes before diagnosis | — | — | Multiple | Needs attention |
-| Cross-file consistency check after changes | — | — | Missed once | Now enforced |
-| Content-based diagnosis skill | — | — | Demonstrated | New skill acquired |
----
+| Pattern | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Trend |
+|---|---|---|---|---|---|---|
+| Jumping to code before reasoning | Frequent | Frequent | 4 times | Improved | Reduced | Improving |
+| Skipping harder questions | — | Noted | 2 times | Reduced | Not tracked | Improving |
+| Answering in fragments not prose | — | — | 3 times | Not tracked | Not tracked | Needs continued attention |
+| Skipping assigned reading | Frequent | Frequent | Improved | Better | Not tracked | Improving |
+| Copying code without understanding | Frequent | Reduced | Rare | Rare | Not tracked | Strong improvement |
+| Flowchart before coding | Not followed | Not followed | Followed | Followed | Architecture-first | Strong |
+| Jumping to fixes before diagnosis | — | — | Multiple | Reduced | Evidence-based | Improving |
+| Cross-file consistency check after changes | — | — | Missed once | Enforced | Explicit boundaries | Strong |
+| Content-based diagnosis skill | — | — | Demonstrated | Repeated | Workflow validation | Acquired |
 
 ## 📚 Resources Used
 
@@ -664,16 +1000,18 @@ Every single time, self-correction happened once directly challenged with "what'
 | Python `concurrent.futures` docs | ThreadPoolExecutor, as_completed | ⭐⭐⭐⭐⭐ |
 | ChromaDB Documentation | Collections, `add()`, `query()`, metadata | ⭐⭐⭐⭐⭐ |
 | pdfplumber Documentation | PDF text extraction, page enumeration | ⭐⭐⭐⭐ |
+| OpenRouter Documentation | OpenAI-compatible model gateway and provider routing | ⭐⭐⭐⭐⭐ |
+| OpenAI API Documentation | Structured outputs, response schemas, message construction | ⭐⭐⭐⭐⭐ |
 
 ---
 
-## 🎯 Next — Phase 4 Continues
+## 🎯 Next — Phase 6
 
-Phase 4 is in progress. Multi-PDF, stage gating, evaluator, and chunking improvements are done and verified. Next session priorities: Bug B (Part 2) re-verification, the deterministic retry-forcing test decision, then hybrid search.
+Phase 5 is complete and verified at v5.9.0 with 7/7 intent workflows passing. Next focus: long-term memory, dynamic planning, async execution, streaming, and production API design.
 ---
 
 <div align="center">
 
-<sub>Updated after every session. Honest entries only. — BizRadar AI v4.0.0 | Phase 3 Closed | Phase 4 In Progress</sub>
+<sub>Updated after every session. Honest entries only. — CoFoundr AI v5.9.0 | Phase 5 Closed | Phase 6 Planned</sub>
 
 </div>
