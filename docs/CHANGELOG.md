@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to BizRadar AI are documented here.
+All notable changes to CoFoundr AI are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
@@ -8,7 +8,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## 📑 Table of Contents
 
+- [v5.9.0 — Phase 5 Closure](#v590--2026-08-28--phase-5-closure)
 - [Unreleased / Deferred](#unreleased--deferred)
+- [v5.8.0 — Provider Hardening, API-Key Rotation & Integration Verification](#v580--2026-08-27--provider-hardening-api-key-rotation--integration-verification)
+- [v5.7.0 — LLM Judge & Workflow Validation](#v570--2026-08-27--llm-judge--workflow-validation)
+- [v5.6.0 — Report Writing & PDF Generation](#v560--2026-08-27--report-writing--pdf-generation)
+- [v5.5.0 — Nurturing, Advancement & General Chat](#v550--2026-08-27--nurturing-advancement--general-chat)
+- [v5.4.0 — Recommendations & Idea Generation](#v540--2026-08-27--recommendations--idea-generation)
+- [v5.3.0 — Risk Analysis & Startup Scoring](#v530--2026-08-27--risk-analysis--startup-scoring)
+- [v5.2.0 — MVP & Technology Advisors](#v520--2026-08-27--mvp--technology-advisors)
+- [v5.1.0 — Research & Retrieval Agents](#v510--2026-08-27--research--retrieval-agents)
+- [v5.0.0 — Multi-Agent Foundation](#v500--2026-08-27--multi-agent-foundation)
 - [v4.5.0 — Phase 4 Closure: Debugging & Hardening](#v450--2026-06-27--phase-4-closure-debugging--hardening)
 - [v4.4.0 — Hybrid Search, Reranking & Dynamic API Pool](#v440--2026-06-25--hybrid-search-reranking--dynamic-api-pool)
 - [v4.3.0 — Chunking Rework & RAG Evaluation Suite](#v430--2026-06-22--chunking-rework--rag-evaluation-suite)
@@ -27,13 +37,40 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v5.9.0] — 2026-08-28 — Phase 5 Closure
+
+### Changed
+- **Phase 5 status:** moved from active development to **closed**.
+- **Release state:** transitioned from implementation-complete to formally verified and release-ready.
+- **Project identity:** documentation standardized on **CoFoundr AI**.
+
+### Verified
+- Final Phase 5 integration verification completed against the existing implementation.
+- **7/7 intent workflows passed:**
+  - `general_chat`
+  - `full_analysis`
+  - `partial_idea`
+  - `idea_exploration`
+  - `nurturing`
+  - `advancement`
+  - `pdf_request`
+- Final `full_analysis` run completed with **0 workflow errors**.
+- Expected and actual intent matched for the final `full_analysis` verification.
+- Error-aware test reporting confirmed the successful run contained no recorded agent failures.
+- Phase 5 functional release status: **READY**.
+
+#### Key Insight
+> Phase 5 is closed only after the existing implementation passes complete intent verification with zero recorded errors.
+
+---
+
 ## Unreleased / Deferred
 
 Every item explicitly punted to a future phase, consolidated here so nothing stays buried inside an old version entry.
 
 | Item | Originally Logged | Target |
 |---|---|---|
-| Multi-agent orchestration (specialist sub-agents) | v4.0.0 | Phase 5 |
+| Multi-agent orchestration (specialist sub-agents) | v4.0.0 | ✅ Complete — Phase 5 |
 | FastAPI REST service layer | v3.0.0 | Phase 6 |
 | SQLite persistent conversation history | v1.0.0 | Phase 6 |
 | `embed_and_store()` per-chunk upsert (currently fails whole batch on any duplicate ID) | v3.5.0 | Backlog |
@@ -43,6 +80,159 @@ Every item explicitly punted to a future phase, consolidated here so nothing sta
 | Stage 2/3 context truncated to 1000 chars at injection (on top of 2000-char storage truncation) | v4.0.0 | Deferred to post-persistence work |
 | `search_documents()`'s `file_name` argument is LLM-trusted, not validated against live file list | v4.0.0 | Deferred until `get_available_files()` supports multi-doc summary-based selection |
 | Deterministic retry-forcing stress test for `MAX_STAGE_RETRIES` | v4.0.0 | **Formally dropped** in v4.5.0 — see below |
+
+---
+
+## [v5.8.0] — 2026-08-27 — Provider Hardening, API-Key Rotation & Integration Verification
+
+### Added
+- **Generic API-key rotation** — added `src/core/key_rotator.py` as a provider-agnostic utility used by provider tools.
+- **Stateful provider rotation** — `GroqTool` and `GeminiTool` maintain rotation state at the tool-instance level across retry attempts.
+- **Provider tool instances** — affected agents now consume shared `groq_tool` / `gemini_tool` instances instead of creating provider clients directly.
+- **OpenRouter reasoning path** — migrated the large-context reasoning workload from Groq to OpenRouter using `openai/gpt-oss-120b`.
+- **Structured provider outputs** — refined structured response handling for recommendations, mid-judge, final-judge, and startup-scoring workflows.
+- **Integration test coverage** — added focused validation for `general_chat`, `full_analysis`, `partial_idea`, `idea_exploration`, `nurturing`, `advancement`, and `pdf_request`.
+
+### Changed
+- Large workflow contexts no longer depend exclusively on Groq's previous input-context limits; OpenRouter now handles the large-context reasoning workload.
+- Provider-specific request construction remains inside provider tools, keeping agent logic independent of SDK details.
+- Workflow failures are recorded in `workflow_state["errors"]` and failed agents are reflected in pipeline status.
+- Test success criteria now require the expected intent and zero recorded workflow errors.
+
+### Fixed
+- API-key rotation logic is shared rather than duplicated across provider tools.
+- Provider consumers were migrated to shared tool instances across the affected agent files without changing agent responsibilities.
+- Structured-output request construction was corrected so prompts/messages and response schemas are passed separately.
+- Error handling now preserves workflow state after handled agent failures instead of hiding the failure from downstream validation.
+
+### Verified
+- All seven Phase 5 intent workflows passed focused integration verification:
+  - `general_chat`
+  - `full_analysis`
+  - `partial_idea`
+  - `idea_exploration`
+  - `nurturing`
+  - `advancement`
+  - `pdf_request`
+- Final `full_analysis` verification: expected `full_analysis`, actual `full_analysis`, **PASS**, errors `0`.
+- `pdf_request` verification: **PASS**.
+- Phase 5 functional verification: **7/7 intent paths passed**.
+
+#### Key Insight
+> Provider abstraction should isolate provider failures and credentials from agent logic. Rotation belongs in the tool layer, not duplicated across agents.
+
+---
+
+## [v5.7.0] — 2026-08-24 — LLM Judge & Workflow Validation
+
+### Added
+- `LLMJudgeAgent` for evaluating workflow output at validation checkpoints.
+- Structured judge responses containing `judgment`, `reason`, and `issues`.
+- PASS/WARNING/FAIL validation for workflow quality.
+- Mid-pipeline and final validation checkpoints integrated into the workflow.
+
+### Verified
+- Judge output is consumed as workflow validation data rather than being treated as an independent report-generation path.
+- Validation remains separate from specialist-agent responsibilities.
+
+---
+
+## [v5.6.0] — 2026-08-23 — Report Writing & PDF Generation
+
+### Added
+- `ReportWriterAgent` for assembling completed specialist outputs into the final structured startup report.
+- `PDFGeneratorAgent` for converting the completed report into a PDF artifact.
+- Report generation consumes workflow outputs rather than performing independent research.
+- PDF generation remains an output/formatting layer after report assembly.
+
+### Changed
+- Report-generation responsibilities were separated from research and analysis agents.
+- Final report assembly preserves upstream workflow evidence instead of inventing replacement data.
+
+---
+
+## [v5.5.0] — 2026-08-22 — Nurturing, Advancement & General Chat
+
+### Added
+- `NurturingAgent` for startup-development and follow-up guidance workflows.
+- `AdvancementAgent` for advancement/scaling-oriented workflows.
+- `GeneralChatAgent` for non-analysis conversational requests.
+- Dedicated intent paths for nurturing, advancement, and general-chat requests.
+
+### Changed
+- General conversation no longer needs to enter the full startup-analysis workflow.
+- Specialist responsibilities remain isolated behind the orchestrator.
+
+---
+
+## [v5.4.0] — 2026-08-21 — Recommendations & Idea Generation
+
+### Added
+- `RecommendationAgent` for evidence-based startup improvement recommendations.
+- `IdeaGenerationAgent` for startup opportunity and idea-exploration workflows.
+- Structured recommendation outputs based on upstream workflow evidence.
+
+### Changed
+- Generated opportunities are grounded in available market/workflow signals rather than isolated model assumptions.
+
+---
+
+## [v5.3.0] — 2026-08-20 — Risk Analysis & Startup Scoring
+
+### Added
+- `RiskAnalystAgent` for structured startup risk analysis.
+- `StartupScorerAgent` for startup viability scoring.
+- Structured score breakdown covering market, MVP, technology, and risk dimensions.
+- Highest-risk identification in scoring output.
+
+### Changed
+- Risk and scoring agents consume upstream workflow outputs through the shared state instead of directly depending on other agents.
+
+---
+
+## [v5.2.0] — 2026-08-19 — MVP & Technology Advisors
+
+### Added
+- `MVPAdvisorAgent` for MVP feature recommendations.
+- `TechAdvisorAgent` for architecture and technology-stack recommendations.
+- Structured outputs for MVP scope and technology decisions.
+
+### Changed
+- Advisor agents read upstream context from `workflow_state` while remaining independently callable and testable.
+
+---
+
+## [v5.1.0] — 2026-08-18 — Research & Retrieval Agents
+
+### Added
+- `MarketResearchAgent` for market and competitor research.
+- `WebSearchAgent` for web-search-backed research workflows.
+- `RAGAgent` for document-grounded retrieval using the existing hybrid RAG pipeline.
+- Shared workflow-state outputs for downstream specialist agents.
+
+### Changed
+- Existing Phase 4 retrieval capabilities were wrapped behind a dedicated RAG specialist rather than being owned by the central agent.
+- Research responsibilities were separated into independently testable specialist agents.
+
+---
+
+## [v5.0.0] — 2026-08-17 — Multi-Agent Foundation
+
+### Added
+- `workflow_state.py` shared communication schema for agent-to-agent handoffs.
+- `OrchestratorAgent` for coordinating specialist agents.
+- `IntentRouterAgent` for selecting the workflow path from user intent.
+- Provider tool layer for Tavily, ChromaDB, Gemini, Groq, BM25, and PDF operations.
+- `core/exceptions.py` and `core/decorators.py` for shared error handling and cross-cutting concerns.
+- Centralized Phase 5 prompts and mock workflow-state fixtures.
+
+### Changed
+- Reorganized the application around independent specialist agents communicating only through `workflow_state`.
+- Kept tools independent from agents and provider SDK details isolated inside tool modules.
+- Established Phase 5's zero-framework architecture: no LangChain, CrewAI, or AutoGen.
+
+#### Key Insight
+> Phase 5 changes the unit of architecture from one tool-calling agent to a coordinated team of specialized agents.
 
 ---
 
