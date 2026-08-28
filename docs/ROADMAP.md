@@ -1,12 +1,12 @@
 <div align="center">
 
-# 🧭 BizRadar AI — Roadmap
+# 🧭 CoFoundr AI — Roadmap
 
 <sub>A phase-by-phase build path. Every phase ends with a concrete capability — something you can demonstrate, not just describe.</sub>
 
-[![Phase](https://img.shields.io/badge/Current_Phase-5_In_Progress-blue?style=for-the-badge)]()
-[![Status](https://img.shields.io/badge/Phase_4-Complete-brightgreen?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-v4.5.0-orange?style=for-the-badge)]()
+[![Phase](https://img.shields.io/badge/Current_Phase-6_Started-blue?style=for-the-badge)]()
+[![Status](https://img.shields.io/badge/Phase_5-Complete-brightgreen?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-v5.9.0-orange?style=for-the-badge)]()
 
 </div>
 
@@ -20,8 +20,8 @@
 | Phase 2 | Real Tool Integrations | ✅ Complete | 100% |
 | Phase 3 | RAG & Document Intelligence | ✅ Complete | 100% |
 | Phase 4 | Multi-PDF, Hybrid Search & RAG Hardening | ✅ Complete | 100% |
-| Phase 5 | Multi-Agent Architecture | 🔄 In Progress | 0% |
-| Phase 6 | Autonomous Research Platform | 📋 Planned | 0% |
+| Phase 5 | Multi-Agent Architecture | ✅ Complete | 100% |
+| Phase 6 | Autonomous Research Platform | 🚀 Started | 0% |
 
 ---
 
@@ -292,100 +292,192 @@ Both pipelines reach 100% Recall@3. The Recall@1 gap is attributed to corpus siz
 
 ---
 
-## 🔄 Phase 5 — Multi-Agent Architecture
+## ✅ Phase 5 — Multi-Agent Architecture
 
 <div align="center">
-<sub><b>Outcome:</b> A multi-section startup report where each section is researched and written by a specialized agent coordinated by an orchestrator, rather than one agent calling every tool itself.</sub>
+<sub><b>Outcome:</b> A production-oriented multi-agent workflow where specialist agents are coordinated through a shared workflow state.</sub>
 </div>
 
 <br>
 
-<details>
-<summary><b>📚 Concepts To Learn</b></summary>
+Phase 5 was completed through incremental provider, orchestration, reliability, and verification work. The final release was **v5.9.0**, with the existing implementation verified rather than new functionality introduced in the closing release.
+
+<details open>
+<summary><b>📚 Concepts Covered</b></summary>
 <br>
 
-- [ ] Multi-agent systems — why one agent cannot do everything well
-- [ ] Orchestrator pattern — coordinator agent that delegates to specialists
-- [ ] Agent communication — how agents pass context and results between each other
-- [ ] Specialized agent design — narrow scope, deep focus per agent
-- [ ] Shared memory — agents reading from and writing to a common state store
-- [ ] Agent handoffs — when and how an orchestrator decides to delegate
-- [ ] Failure handling — what happens when a sub-agent fails or times out
+- [x] Multi-agent architecture — specialist agents with focused responsibilities
+- [x] Orchestrator pattern — centralized workflow coordination
+- [x] Shared workflow state — passing structured context between agents
+- [x] Agent handoffs — sequential specialist execution through shared state
+- [x] Provider abstraction — reusable provider tools instead of provider logic inside agents
+- [x] Dynamic API-key rotation — instance-level rotation with shared key-rotation utility
+- [x] Provider migration strategy — routing large-context workloads through OpenRouter
+- [x] Structured outputs — provider-compatible response schemas
+- [x] Workflow error propagation — failed agents remain visible to downstream consumers
+- [x] Focused integration testing — intent-level workflow verification
 
 </details>
 
 <details>
-<summary><b>🔨 Agents To Build</b></summary>
+<summary><b>🔨 What Was Built</b></summary>
 <br>
 
-| Agent | Responsibility |
+| Component | Purpose |
 |---|---|
-| `orchestrator_agent.py` | Receives user input, delegates to specialists, assembles final report |
-| `market_research_agent.py` | Deep market and competitor analysis — absorbs current Stage 1 tools |
-| `tech_advisor_agent.py` | Architecture and stack recommendations — absorbs current Stage 2 tools |
-| `risk_agent.py` | Feature-by-feature risk analysis — absorbs current Stage 3 tool |
-| `document_agent.py` | Hybrid RAG retrieval owner — absorbs current Stage 4 + relevance classifier |
-| `report_writer_agent.py` | Compiles all agent outputs into the final structured report |
+| `orchestrator_agent.py` | Coordinates specialist-agent execution and workflow state |
+| Specialist agent modules | Market, MVP, technology, recommendation, scoring, and judging responsibilities |
+| `workflow_state` | Shared state carrying inputs, outputs, errors, and pipeline status |
+| `key_rotator.py` | Generic provider-independent API-key rotation logic |
+| `gemini_tool.py` | Gemini provider integration with reusable tool-instance behavior |
+| `groq_tool.py` | Groq provider integration retained for supported workloads |
+| `tavily_tool.py` | Web-search integration used by research agents |
+| `decorators.py` | Centralized workflow error capture and failure-state recording |
+| Focused test runner | Validates expected intent, actual intent, and recorded workflow errors |
 
 </details>
 
 <details>
-<summary><b>🎯 Entry Checklist (from Phase 4 closure)</b></summary>
+<summary><b>⚖️ Key Decisions</b></summary>
 <br>
 
-- [x] Phase 4 fully closed — no open bugs blocking Phase 5 start
-- [x] Stage-gating (`validate_stage_tools()`) proven reliable — the pattern this phase's agent handoffs will build on
-- [x] Hybrid RAG pipeline stable and evaluated — safe to wrap as a standalone `document_agent`
-- [ ] Decide: do specialist agents share one Groq client/model, or does each get its own?
-- [ ] Decide: does the orchestrator agent replace `StartupAgent`, or wrap it?
-- [ ] Design shared state format — `workflow_state` from Phase 4 is a natural starting point but was designed for single-agent tool results, not multi-agent handoffs
+| Decision | Reasoning |
+|---|---|
+| Specialist agents over one monolithic agent | Each workflow responsibility needs narrower context and clearer ownership |
+| `orchestrator_agent.py` as the orchestration entry point | Keeps orchestration logic separate from legacy RAG/tool modules |
+| Shared `workflow_state` | Provides a consistent contract for agent handoffs and downstream reporting |
+| Generic `key_rotator.py` | Prevents duplicated credential-rotation logic across providers |
+| OpenRouter for large-context reasoning | Groq context limits became restrictive for some agent inputs |
+| Gemini retained for supported analysis workloads | Preserves an existing provider path where it remains appropriate |
+| Error capture through shared workflow state | Prevents failed agents from appearing successful through default state values |
+| Verification before Phase 5 closure | Release readiness requires complete intent coverage and zero recorded errors |
+
+</details>
+
+<details open>
+<summary><b>🗂️ Phase 5 Release Progression</b></summary>
+<br>
+
+| Version | Focus | Status |
+|---|---|---|
+| v5.0.0–v5.6.0 | Specialist-agent and multi-agent workflow construction | ✅ Complete |
+| v5.7.0 | LLM judging and structured workflow validation | ✅ Complete |
+| v5.8.0 | Provider migration, Gemini integration, API-key rotation, reliability changes | ✅ Complete |
+| v5.9.0 | Final verification, documentation consolidation, Phase 5 closure | ✅ Complete |
+
+</details>
+
+<details open>
+<summary><b>✅ Final Verification</b></summary>
+<br>
+
+| Verification | Result |
+|---|---|
+| `general_chat` | ✅ PASS |
+| `full_analysis` | ✅ PASS |
+| `partial_idea` | ✅ PASS |
+| `idea_exploration` | ✅ PASS |
+| `nurturing` | ✅ PASS |
+| `advancement` | ✅ PASS |
+| `pdf_request` | ✅ PASS |
+| Intent workflows | **7/7 PASS** |
+| Final `full_analysis` | **PASS — 0 errors** |
+
+</details>
+
+<details>
+<summary><b>🧠 Phase 5 Engineering Lessons</b></summary>
+<br>
+
+- Provider selection must follow workload requirements, especially context-window requirements.
+- Provider-specific recovery logic should live below the agent layer.
+- Error handling must preserve failures inside shared state.
+- Expected intent alone cannot establish workflow success.
+- Final verification should measure both routing correctness and workflow health.
+- Slow successful execution is a performance concern, not automatically a release blocker.
 
 </details>
 
 <br>
 
-> **Milestone:** BizRadar produces a multi-section report where each section comes from a dedicated specialist agent, coordinated rather than centrally executed.
+> **Milestone:** CoFoundr AI coordinates specialist agents through a shared workflow, supports multiple model providers, preserves workflow failures, and passes all seven focused intent tests.
 
 ---
 
-## 📋 Phase 6 — Autonomous Research Platform
+## 🚀 Phase 6 — Autonomous Research Platform
 
 <div align="center">
-<sub><b>Outcome:</b> Single input. Fully autonomous research. Scored, cited, structured report — no follow-up prompts required.</sub>
+<sub><b>Outcome:</b> Single input. Autonomous research. Scored, cited, structured report — with planning, memory, and service-ready execution.</sub>
 </div>
 
 <br>
 
-<details>
+Phase 6 has **started**. The focus now shifts from completing the multi-agent foundation to making the workflow increasingly autonomous, persistent, observable, and service-ready.
+
+<details open>
 <summary><b>📚 Concepts To Learn</b></summary>
 <br>
 
-- [ ] Long-term memory — persistent storage beyond context window (SQLite)
-- [ ] Dynamic planning — agent breaks down a goal into subtasks automatically
-- [ ] Startup scoring — building a scoring rubric and evaluation framework (0–100)
-- [ ] Asyncio — `async/await`, event loops, replacing ThreadPoolExecutor
-- [ ] Streaming responses — token-by-token output for better UX
-- [ ] REST API layer — FastAPI wrapper around the agent
-- [ ] Rate limiting and retry logic — exponential backoff, circuit breaker pattern
+- [ ] Long-term memory — persistent storage beyond the context window
+- [ ] Dynamic planning — automatic decomposition of goals into subtasks
+- [ ] Startup scoring — formal 0–100 evaluation rubric
+- [ ] Async execution — `async/await` and event-loop based concurrency
+- [ ] Streaming responses — incremental output for better UX
+- [ ] REST API layer — FastAPI service around the agent
+- [ ] Rate limiting and retry logic — exponential backoff and circuit-breaker patterns
+- [ ] Observability — structured logs, execution traces, latency, and failure metrics
+
+</details>
+
+<details open>
+<summary><b>🎯 Phase 6 Starting Priorities</b></summary>
+<br>
+
+| Priority | Objective | Initial Deliverable |
+|---|---|---|
+| 1 | Persistent memory | Define storage contract and SQLite-backed memory layer |
+| 2 | Autonomous planning | Define goal → subtasks → execution workflow |
+| 3 | Startup scoring | Formalize scoring dimensions and aggregation rules |
+| 4 | Execution modernization | Evaluate async execution against current concurrency model |
+| 5 | Streaming UX | Define event/output contract before implementation |
+| 6 | Service layer | Design FastAPI boundary around the agent workflow |
+| 7 | Reliability | Standardize retries, timeouts, and circuit-breaker behavior |
+| 8 | Observability | Capture per-agent latency, errors, retries, and final status |
 
 </details>
 
 <details>
-<summary><b>🔨 What To Build</b></summary>
+<summary><b>🔨 Planned Components</b></summary>
 <br>
 
-| File | Purpose |
+| Component | Purpose |
 |---|---|
 | `memory_store.py` | Persistent long-term memory with SQLite |
-| `planner.py` | Goal decomposition into subtask list |
-| `scorer.py` | Startup viability scoring with rubric |
-| `api.py` | FastAPI endpoints exposing agent as a service |
+| `planner.py` | Goal decomposition into executable subtasks |
+| `scorer.py` | Startup viability scoring with a defined rubric |
+| `api.py` | FastAPI endpoints exposing the workflow as a service |
+| Observability layer | Execution traces, latency, retries, and failures |
+
+</details>
+
+<details>
+<summary><b>⚖️ Phase 6 Design Principles</b></summary>
+<br>
+
+| Principle | Reasoning |
+|---|---|
+| Build on Phase 5 orchestration | Avoid replacing a verified coordination layer unnecessarily |
+| Plan before executing | Autonomous systems need explicit task decomposition |
+| Persist only useful state | Long-term memory should improve future execution, not duplicate context |
+| Measure before optimizing | Phase 5 established correctness; Phase 6 must quantify performance |
+| Keep provider concerns isolated | New autonomy features should remain provider-independent |
+| Make failures observable | Autonomous workflows require stronger operational visibility |
 
 </details>
 
 <br>
 
-> **Milestone:** User types a startup idea once. BizRadar autonomously researches, scores, and delivers a full report with no follow-up prompts.
+> **Milestone:** CoFoundr AI accepts one startup idea and autonomously plans, researches, scores, and assembles a cited report without requiring manual workflow decisions.
 
 ---
 
@@ -412,44 +504,52 @@ Both pipelines reach 100% Recall@3. The Recall@1 gap is attributed to corpus siz
 | CrossEncoder Reranking | Phase 4 | ✅ Unlocked — precision layer on fused candidates |
 | RAG Evaluation Methodology (Recall@K, MRR) | Phase 4 | ✅ Unlocked — dual benchmark suite (semantic + lexical) |
 | Multi-Key API Failover & Rate-Limit Handling | Phase 4 | ✅ Unlocked — exponential cooldown, min-wait retry |
-| Multi-Agent Orchestration | Phase 5 | 🔄 In Progress |
-| Agent Communication & Handoffs | Phase 5 | 🔄 In Progress |
-| Long-Term Memory | Phase 6 | 📋 Planned |
-| Autonomous Planning | Phase 6 | 📋 Planned |
-| Production API Design | Phase 6 | 📋 Planned |
+| Multi-Agent Orchestration | Phase 5 | ✅ Unlocked — verified in Phase 5 |
+| Agent Communication & Handoffs | Phase 5 | ✅ Unlocked — shared workflow verified |
+| Long-Term Memory | Phase 6 | 🚀 Started |
+| Autonomous Planning | Phase 6 | 🚀 Started |
+| Production API Design | Phase 6 | 🚀 Started |
 
 ---
 
-## 📚 Phase 4 Closure Checklist — Final Status
+## 📚 Phase 5 Closure Checklist — Final Status
 
-- [x] ChromaDB `where` clause metadata filtering — implemented and verified
-- [x] Ingest 2+ PDFs, query with a filename filter, verify isolation — confirmed working
-- [x] Stage-gating enforcement — `validate_stage_tools()` shipped and caught real violations
-- [x] Document relevance classifier — shipped, benchmarked, known limitations documented
-- [x] Chunking rework — shipped, verified no retrieval regression
-- [x] RAG evaluator — built, 100% Recall@3 on vector pipeline
-- [x] Hybrid search (BM25 + vector fusion) — shipped, 100% Recall@3 on hybrid pipeline
-- [x] CrossEncoder reranking — integrated into `query_rag()`
-- [x] BM25 persistence across process restarts — verified
-- [x] Dynamic Gemini API pool with rate-limit retry — verified
-- [x] All previously open bugs resolved, deferred with a reason, or reclassified
-- [x] Classifier prompt centralized into `prompts.py`
+- [x] Multi-agent orchestration — specialist-agent workflow implemented and verified
+- [x] Shared workflow state — agent handoffs and downstream state propagation verified
+- [x] Intent-based workflow routing — all seven focused workflows verified
+- [x] Provider abstraction — provider-specific integrations separated from agent logic
+- [x] OpenRouter migration — large-context workloads migrated from Groq due to input-context limitations
+- [x] Gemini integration — Gemini provider tooling retained and stabilized for supported workloads
+- [x] Dynamic API-key rotation — reusable instance-level key rotation implemented
+- [x] Workflow error handling — failed agents recorded in `workflow_state.errors` and `pipeline_status`
+- [x] Structured response formats — judge, recommendation, and startup-score contracts implemented
+- [x] Intermediate LLM judging — PASS / WARNING / FAIL validation implemented
+- [x] Final report judging — final report validation implemented
+- [x] Provider integration verification — transient provider failures handled during final testing
+- [x] Focused intent testing — `general_chat`, `full_analysis`, `partial_idea`, `idea_exploration`, `nurturing`, `advancement`, and `pdf_request` verified
+- [x] Final `full_analysis` verification — expected intent matched actual intent with `Errors: 0`
+- [x] Phase 5 documentation — changelog, learning log, roadmap, architecture, and engineering audit consolidated
 
-**Phase 4 is closed. No open items are blocking Phase 5.**
+**Phase 5 is closed. All seven focused intent workflows passed, including the final full-analysis verification with zero workflow errors.**
 
----
-
-## 🔜 Starting Phase 5
-
-- [ ] Design the orchestrator/specialist-agent boundary — what moves out of `orchestrator.py` into dedicated agent files
-- [ ] Decide on shared-state format between agents (evolve `workflow_state` or replace it)
-- [ ] Prototype one specialist agent end-to-end (`document_agent` is the natural first candidate — hybrid RAG is already self-contained)
-- [ ] Re-run the full Phase 4 evaluation suite (`evaluator.py`, `classifier_evaluator.py`) once the document pipeline moves into its own agent, to confirm no regression
+> **Release status:** v5.9.0 — Phase 5 Complete. No known functional blocker remains for Phase 6.
 
 ---
+
+## 🔜 Starting Phase 6
+
+- [x] Phase 5 closed at v5.9.0 with 7/7 focused intent workflows passing
+- [x] Final `full_analysis` verified with 0 workflow errors
+- [ ] Define the Phase 6 persistent-memory contract
+- [ ] Design autonomous goal decomposition and planning state
+- [ ] Define startup scoring dimensions and aggregation
+- [ ] Establish Phase 6 observability and performance baseline
+- [ ] Evaluate async execution against the current Phase 5 workflow
+- [ ] Design the FastAPI service boundary
+
 
 <div align="center">
 
-<sub>BizRadar AI v4.5.0 — Phase 4 Closed | Phase 5 In Progress</sub>
+<sub>CoFoundr AI v5.9.0 — Phase 5 Closed | Phase 6 Started</sub>
 
 </div>
