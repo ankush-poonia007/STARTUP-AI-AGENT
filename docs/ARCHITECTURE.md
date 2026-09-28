@@ -770,32 +770,21 @@ Phase 6 should therefore focus on execution efficiency.
 
 # ⚠️ Known Limitations
 
-### Current system
+### Phase 5 limitations (addressed in Phase 6)
 
-- CLI-first interface.
-- Session memory remains non-persistent.
-- Local ChromaDB storage.
-- Local BM25 index.
-- Thread-based execution.
-- Provider APIs remain external dependencies.
-- Full analysis can have high end-to-end latency.
-- RAG fusion weight remains fixed at `0.5`.
-- CrossEncoder adds retrieval latency.
-- Prompt-based relevance classification can make mistakes.
+- ~~CLI-first interface~~ → FastAPI REST API in Phase 6
+- ~~Session memory non-persistent~~ → PostgreSQL + ChromaDB persistent memory in Phase 6
+- ~~Single-user, no isolation~~ → startup_id isolation in Phase 6
 
-### Architectural debt
+### Phase 6 remaining limitations (documented honestly)
 
-```text
-Current
-    ↓
-Strong multi-agent orchestration
-    ↓
-But execution is still largely synchronous
-    ↓
-Phase 6
-    ↓
-Async + persistent + observable platform
-```
+- Local ChromaDB and BM25 storage — not production-grade managed storage
+- Thread-based Phase 5 agent execution — wrapped in `asyncio.to_thread()`, not natively async
+- No real-time streaming — workflow results available via polling only
+- Scanned PDFs not supported — text extraction requires selectable text
+- Documents stuck in PROCESSING status if server restarts mid-processing — no task queue recovery
+- Full analysis latency can be high — multiple provider calls, no caching layer
+- RAG fusion weight fixed at 0.5 — not query-adaptive
 
 ---
 
@@ -803,42 +792,84 @@ Async + persistent + observable platform
 
 Phase 6 has **started**.
 
-The target is to evolve CoFoundr AI from a strong multi-agent pipeline into a more autonomous platform.
+The goal is **portfolio signal** — not SaaS completeness. Phase 6 adds the minimal backend infrastructure that gives the AI system persistent context, structured I/O, and a professional service boundary. Every non-AI component exists only to serve AI execution.
 
 ```mermaid
 flowchart TD
-    P5["✅ Phase 5 Complete"] --> P6["🚀 Phase 6 Started"]
+    P5["✅ Phase 5 Complete\nv5.9.0"] --> P6["🚀 Phase 6 In Progress"]
 
-    P6 --> MEM["Persistent Memory"]
-    P6 --> PLAN["Planning Layer"]
-    P6 --> API["FastAPI"]
-    P6 --> ASYNC["Async Execution"]
-    P6 --> STREAM["Streaming"]
-    P6 --> OBS["Observability"]
-    P6 --> PERF["Performance Optimization"]
+    P6 --> DB["PostgreSQL\nSP-01: 5 tables + migrations"]
+    P6 --> INFRA["Infrastructure\nSP-02: Config + ChromaDB isolation"]
+    P6 --> AUTH["FastAPI + Auth\nSP-03: JWT + refresh tokens"]
+    P6 --> API["Resource APIs\nSP-04: CRUD + PDF upload"]
+    P6 --> MEM["Memory + RAG\nSP-05: Persistent memory + polished RAG"]
+    P6 --> ORCH["Orchestration\nSP-06: TaskContext + AgentResult + workflow API"]
 
-    MEM --> PLATFORM["Autonomous Platform"]
-    PLAN --> PLATFORM
-    API --> PLATFORM
-    ASYNC --> PLATFORM
-    STREAM --> PLATFORM
-    OBS --> PLATFORM
-    PERF --> PLATFORM
+    DB --> DONE["v6.0.0\nPortfolio-ready"]
+    INFRA --> DONE
+    AUTH --> DONE
+    API --> DONE
+    MEM --> DONE
+    ORCH --> DONE
 ```
 
-## Priority direction
+## Phase 6 Sub-Phase Architecture
 
-| Area | Current | Phase 6 direction |
+| Sub-Phase | Focus | Key Deliverable |
 |---|---|---|
-| Architecture | Multi-agent | More autonomous |
-| Memory | In-memory | Persistent |
-| Planning | Execution-plan based | Dedicated planning |
-| API | CLI | FastAPI |
-| Execution | ThreadPoolExecutor | Async execution |
-| Output | Batch-oriented | Streaming |
-| Monitoring | Basic status/errors | Observability |
-| Performance | Functional but slow | Latency optimization |
-| Retrieval | Hybrid fixed fusion | Adaptive retrieval |
+| SP-01 | Database Foundation | 5 tables, Alembic migrations, repository pattern |
+| SP-02 | Infrastructure | Centralised config, ChromaDB startup_id isolation, file storage |
+| SP-03 | Auth + FastAPI | JWT + refresh tokens, error envelope, health endpoints |
+| SP-04 | Core Resource APIs | Startup/conversation/message/memory/document CRUD |
+| SP-05 | Memory + RAG | LLM memory extraction, persistent ChromaDB, hybrid retrieval polished |
+| SP-06 | Orchestration | TaskContext/AgentResult contracts, workflow API, memory+RAG injection |
+
+## Phase 6 Architecture Layer
+
+```mermaid
+flowchart TD
+    FE["Frontend"] --> API["FastAPI REST API"]
+    API --> AUTH["JWT Auth Middleware"]
+    AUTH --> SVC["Service Layer"]
+    SVC --> REPO["Repository Layer"]
+    REPO --> PG["PostgreSQL"]
+    SVC --> ORCH["OrchestratorAgent"]
+    ORCH --> TC["TaskContext\n(memory + RAG injected)"]
+    TC --> AGENTS["17 Phase 5 Agents\n(unchanged internally)"]
+    AGENTS --> WS["workflow_state"]
+    WS --> JUDGE["LLM Judge"]
+    JUDGE --> WRITER["ReportWriter"]
+    WRITER --> RESULT["Workflow Result\nstored to PostgreSQL"]
+    SVC --> MEM["Memory Pipeline\nExtraction + ChromaDB"]
+    SVC --> RAG["RAG Pipeline\nBM25 + Vector + CrossEncoder"]
+    MEM --> CHROMA["ChromaDB\nstartup_id isolated"]
+    RAG --> CHROMA
+```
+
+## What Phase 6 Adds vs Phase 5
+
+| Capability | Phase 5 | Phase 6 |
+|---|---|---|
+| Interface | CLI only | FastAPI REST API |
+| Auth | None | JWT + refresh tokens |
+| Memory | Lost on exit | PostgreSQL + ChromaDB persistent |
+| Context | Single user | Multi-user, startup_id isolated |
+| RAG | Working but flat | startup_id isolated, code polished |
+| Agent contracts | Loose dicts | Typed TaskContext + AgentResult |
+| Workflow | Synchronous CLI | API submission + status polling |
+| Documents | CLI upload | REST upload + MIME validation + processing pipeline |
+
+## What Phase 6 Explicitly Does NOT Build
+
+| Feature | Reason |
+|---|---|
+| Autonomous planning / DAG | SaaS-level, not the story |
+| Redis | Backend plumbing, low AI signal |
+| Streaming (WebSocket) | Not needed for portfolio demo |
+| Circuit breakers | Production concern |
+| OpenTelemetry / Prometheus | Deployment concern |
+| 9-dimension scoring engine | Current Phase 5 scoring sufficient |
+| Crash recovery | Task queue required — out of scope |
 
 ---
 
@@ -867,12 +898,12 @@ The architecture is intentionally modular so individual components can evolve wi
 
 <br>
 
-### 🚀 Phase 6 Started
+### 🚀 Phase 6 In Progress
 
-**Persistence • Planning • Async execution • APIs • Streaming • Observability • Performance**
+**PostgreSQL persistence • JWT auth • FastAPI REST API • Persistent memory • startup_id RAG isolation • TaskContext/AgentResult contracts • Workflow API**
 
 <br>
 
-<sub>CoFoundr AI — Architecture Deep Dive | v5.9.0</sub>
+<sub>CoFoundr AI — Architecture Deep Dive | Phase 6 In Progress</sub>
 
 </div>
