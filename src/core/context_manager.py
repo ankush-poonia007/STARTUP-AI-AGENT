@@ -1,37 +1,38 @@
-# ============================================================
-#  context_manager.py — Conversation History Store for BizRadar AI
-# ============================================================
-#
-#  What this file does:
-#  Maintains a module-level conversation history list across turns.
-#  Provides add_message() to append new messages and get_context()
-#  to retrieve the last 6 messages for injection into the agent loop.
-#
-#  What this file does NOT handle:
-#  Does not persist history to disk — resets on every process restart.
-#  Validates role values are "user" or "assistant" — invalid roles rejected with stderr warning.
-#  Does not manage the agent's internal messages list — that belongs to agent.py.
-#  Does not summarize or compress old history — old messages are simply dropped.
-#
-#  Functions:
-#  - add_message()  → appends a role/content dict to conversation_history
-#  - get_context()  → returns the last 6 messages from conversation_history
-#
-#  Used by:
-#  - agent.py → calls get_context() once per session to seed message history,
-#               calls add_message() to log each user and assistant turn
-#
-#  Flow:
-#  add_message(role, content) → appends to conversation_history →
-#  get_context() → returns [-6:] slice → agent.py injects into messages list
-#
-#  Why 6 messages:
-#  Balances two constraints — context window limits (sending full unbounded
-#  history eventually breaks the Groq API token limit) and relevance
-#  degradation (old turns distract the LLM from the current analysis).
-#  6 covers ~3 full turns (user + assistant each), enough for follow-up
-#  coherence without polluting the current pipeline run.
-# ============================================================
+"""
+    ============================================================
+    context_manager.py — Conversation History Store for BizRadar AI
+    ============================================================
+
+    What this file does:
+    Maintains a module-level conversation history list across turns.
+    Provides add_message() to append new messages and get_context()
+    to retrieve the last 6 messages for injection into the agent loop.
+    What this file does NOT handle:
+    Does not persist history to disk — resets on every process restart.
+    Validates role values are "user" or "assistant" — invalid roles rejected with stderr warning.
+    Does not manage the agent's internal messages list — that belongs to agent.py.
+    Does not summarize or compress old history — old messages are simply dropped.
+
+    Functions:
+        - add_message()  → appends a role/content dict to conversation_history
+        - get_context()  → returns the last 6 messages from conversation_history
+
+    Used by:
+        - agent.py → calls get_context() once per session to seed message history,
+                     calls add_message() to log each user and assistant turn
+
+    Flow:
+        add_message(role, content) → appends to conversation_history →
+        get_context() → returns [-6:] slice → agent.py injects into messages list
+
+    Why 6 messages:
+    Balances two constraints — context window limits (sending full unbounded
+    history eventually breaks the Groq API token limit) and relevance
+    degradation (old turns distract the LLM from the current analysis).
+    6 covers ~3 full turns (user + assistant each), enough for follow-up
+    coherence without polluting the current pipeline run.
+    ============================================================
+"""
 
 
 import sys
