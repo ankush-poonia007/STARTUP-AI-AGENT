@@ -1,14 +1,56 @@
-# ── Core ──────────────────────────────────────────────
-python-dotenv>=1.0.0        # Environment variable management
-requests>=2.31.0            # HTTP error handling in tools.py
+# ═══════════════════════════════════════════════════════════════
+# CoFoundr AI — Phase 6 Requirements
+# Install: pip install -r requirements.txt
+# System dep (not pip): sudo apt-get install libmagic1
+# ═══════════════════════════════════════════════════════════════
 
-# ── LLM Providers ─────────────────────────────────────
-groq>=0.9.0                 # Groq LPU inference — Llama 3.3 70B
-google-genai>=1.0.0         # Gemini 2.5 Flash + gemini-embedding-001
-# ── Web Search ────────────────────────────────────────
-tavily-python>=0.3.0        # Tavily Search API — real-time market research
+# ── Environment ───────────────────────────────────────────────
+python-dotenv                       # .env loading (Phase 5 + Phase 6 config)
+pydantic-settings                   # Phase 6 centralised config (src/core/config.py)
 
-# ── RAG Pipeline ──────────────────────────────────────
-chromadb>=0.5.0             # Persistent vector store
-pdfplumber>=0.10.0          # PDF text extraction
-reportlab >= 4.4.2          # PDF doc geneartion
+# ── FastAPI ───────────────────────────────────────────────────
+fastapi[all]                        # API framework + uvicorn + pydantic v2
+python-multipart                    # multipart/form-data for file uploads
+
+# ── Database ──────────────────────────────────────────────────
+sqlalchemy[asyncio]                 # Async ORM
+asyncpg                             # Async PostgreSQL driver
+alembic                             # Database migrations
+psycopg2-binary                     # Sync driver for Alembic migrations only
+
+# ── Authentication ────────────────────────────────────────────
+PyJWT                               # JWT access token creation + validation
+argon2-cffi                         # Argon2id password hashing
+
+# ── LLM Providers ─────────────────────────────────────────────
+openai                              # OpenRouter via OpenAI-compatible API
+google-genai                        # Gemini LLM + embeddings
+
+# ── Web Search ────────────────────────────────────────────────
+tavily-python                       # Tavily live web search
+
+# ── RAG Pipeline ──────────────────────────────────────────────
+chromadb                            # Persistent vector store
+pypdf                               # PDF text extraction (Phase 6 rewrite)
+pdfplumber                          # PDF extraction fallback (Phase 5 preserved)
+bm25s                               # BM25 lexical retrieval
+sentence-transformers               # CrossEncoder reranking (BAAI/bge-reranker-v2-m3)
+
+# ── File Handling ─────────────────────────────────────────────
+python-magic                        # MIME type validation from file bytes
+                                    # SYSTEM DEP REQUIRED: sudo apt-get install libmagic1
+                                    # macOS: brew install libmagic
+
+# ── PDF Generation ────────────────────────────────────────────
+reportlab                           # PDF report generation (Phase 5 preserved)
+
+# ── HTTP ──────────────────────────────────────────────────────
+requests                            # HTTP client used in Phase 5 tools
+httpx                               # Async HTTP client for FastAPI test client
+
+# ── Testing ───────────────────────────────────────────────────
+pytest                              # Test runner
+pytest-asyncio                      # Async test support
+
+# ── Utilities ─────────────────────────────────────────────────
+# No additional utilities required beyond above packages
