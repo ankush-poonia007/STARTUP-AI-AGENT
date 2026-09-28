@@ -404,59 +404,73 @@ Phase 5 was completed through incremental provider, orchestration, reliability, 
 
 ---
 
-## 🚀 Phase 6 — Autonomous Research Platform
+## 🚀 Phase 6 — Portfolio-Signal Platform
 
 <div align="center">
-<sub><b>Outcome:</b> Single input. Autonomous research. Scored, cited, structured report — with planning, memory, and service-ready execution.</sub>
+<sub><b>Outcome:</b> A professional AI engineering portfolio project — persistent memory, FastAPI REST API, multi-user isolation, and the full Phase 5 agent system accessible through a structured service boundary.</sub>
 </div>
 
 <br>
 
-Phase 6 has **started**. The focus now shifts from completing the multi-agent foundation to making the workflow increasingly autonomous, persistent, observable, and service-ready.
+Phase 6 has **started**. The focus is **portfolio signal** — demonstrating AI engineering depth built from first principles, not SaaS completeness.
+
+**One sentence goal:** Add the minimal backend infrastructure that gives the AI system persistent context, structured I/O, and a professional service boundary.
 
 <details open>
 <summary><b>📚 Concepts To Learn</b></summary>
 <br>
 
-- [ ] Long-term memory — persistent storage beyond the context window
-- [ ] Dynamic planning — automatic decomposition of goals into subtasks
-- [ ] Startup scoring — formal 0–100 evaluation rubric
-- [ ] Async execution — `async/await` and event-loop based concurrency
-- [ ] Streaming responses — incremental output for better UX
-- [ ] REST API layer — FastAPI service around the agent
-- [ ] Rate limiting and retry logic — exponential backoff and circuit-breaker patterns
-- [ ] Observability — structured logs, execution traces, latency, and failure metrics
+- [x] Alembic migrations — `revision --autogenerate` vs `upgrade head`, async engine config
+- [x] AsyncSession lifecycle — per-request session management in FastAPI
+- [x] CASCADE DELETE — database-level vs application-level deletion
+- [ ] JWT structure — header, payload, signature, token_type claim
+- [ ] Refresh token pattern — opaque token, SHA-256 hash storage
+- [ ] Argon2id password hashing — why it beats bcrypt
+- [ ] pydantic-settings — centralised config from environment variables
+- [ ] FastAPI dependency injection — `Depends()` for auth and infrastructure
+- [ ] Offset pagination — page, page_size, total, items
+- [ ] MIME type validation — why file extension alone is insufficient
+- [ ] ChromaDB metadata filtering — `where` clause with startup_id
+- [ ] BM25 vs vector similarity — keyword vs semantic retrieval
+- [ ] LLM memory extraction — structured JSON from conversation messages
+- [ ] asyncio.to_thread — running synchronous Phase 5 agents in async FastAPI
+- [ ] FastAPI BackgroundTask — non-blocking memory extraction and document processing
 
 </details>
 
 <details open>
-<summary><b>🎯 Phase 6 Starting Priorities</b></summary>
+<summary><b>🎯 Phase 6 Sub-Phases</b></summary>
 <br>
 
-| Priority | Objective | Initial Deliverable |
-|---|---|---|
-| 1 | Persistent memory | Define storage contract and SQLite-backed memory layer |
-| 2 | Autonomous planning | Define goal → subtasks → execution workflow |
-| 3 | Startup scoring | Formalize scoring dimensions and aggregation rules |
-| 4 | Execution modernization | Evaluate async execution against current concurrency model |
-| 5 | Streaming UX | Define event/output contract before implementation |
-| 6 | Service layer | Design FastAPI boundary around the agent workflow |
-| 7 | Reliability | Standardize retries, timeouts, and circuit-breaker behavior |
-| 8 | Observability | Capture per-agent latency, errors, retries, and final status |
+| Sub-Phase | Focus | Duration | Key Deliverable |
+|---|---|---|---|
+| SP-01 | Database Foundation | 12 hours | 5 tables, Alembic migrations, repository pattern, CASCADE DELETE |
+| SP-02 | Infrastructure | 6 hours | Centralised config, ChromaDB startup_id isolation, file storage |
+| SP-03 | Auth + FastAPI | 12 hours | JWT + refresh tokens, Argon2id, error envelope, health endpoints |
+| SP-04 | Core Resource APIs | 15 hours | Startup/conversation/message/memory/document CRUD + PDF upload |
+| SP-05 | Memory + RAG | 15 hours | LLM memory extraction, persistent memory, RAG pipeline polished |
+| SP-06 | Orchestration | 10 hours | TaskContext/AgentResult, workflow API, memory+RAG injection |
+| Polish + Frontend | Final integration | 5 hours | Frontend, README, CHANGELOG, v6.0.0 tag |
+| **Total** | | **75 hours** | |
 
 </details>
 
-<details>
-<summary><b>🔨 Planned Components</b></summary>
+<details open>
+<summary><b>🔨 Phase 6 Components</b></summary>
 <br>
 
-| Component | Purpose |
-|---|---|
-| `memory_store.py` | Persistent long-term memory with SQLite |
-| `planner.py` | Goal decomposition into executable subtasks |
-| `scorer.py` | Startup viability scoring with a defined rubric |
-| `api.py` | FastAPI endpoints exposing the workflow as a service |
-| Observability layer | Execution traces, latency, retries, and failures |
+| Component | File | Purpose |
+|---|---|---|
+| Database models | `src/repositories/models/` | 5 SQLAlchemy async models |
+| Repositories | `src/repositories/` | One repository per table, no raw SQL outside |
+| Config | `src/core/config.py` | pydantic-settings, all env vars in one place |
+| Auth | `src/core/security.py` | JWT + Argon2id + refresh token generation |
+| File storage | `src/infrastructure/storage/` | Server-controlled paths, path traversal protection |
+| Memory pipeline | `src/memory/` | Relevance checker → LLM extractor → ChromaDB storage |
+| Document processor | `src/documents/` | Text extraction → chunking → embedding → ChromaDB |
+| Agent contracts | `src/agents/schemas/` | TaskContext + AgentResult dataclasses |
+| Workflow service | `src/services/workflow_service.py` | Lifecycle management, asyncio.to_thread wrapping |
+| FastAPI app | `src/app.py` | Application factory, middleware, routers, lifecycle |
 
 </details>
 
@@ -466,18 +480,36 @@ Phase 6 has **started**. The focus now shifts from completing the multi-agent fo
 
 | Principle | Reasoning |
 |---|---|
-| Build on Phase 5 orchestration | Avoid replacing a verified coordination layer unnecessarily |
-| Plan before executing | Autonomous systems need explicit task decomposition |
-| Persist only useful state | Long-term memory should improve future execution, not duplicate context |
-| Measure before optimizing | Phase 5 established correctness; Phase 6 must quantify performance |
-| Keep provider concerns isolated | New autonomy features should remain provider-independent |
-| Make failures observable | Autonomous workflows require stronger operational visibility |
+| Portfolio signal over SaaS completeness | 75 hours — build what demonstrates AI engineering depth |
+| Every non-AI component serves AI execution | FastAPI, DB, auth exist to give agents persistent context |
+| Phase 5 agents untouched internally | Adapter wrappers only — proven logic is not rewritten |
+| startup_id isolation everywhere | Multi-user correctness requires it on every ChromaDB operation |
+| Phase 5 regression suite must stay green | 7/7 intent tests pass after every agent modification |
+| Flowchart before code — no exceptions | Mandatory per ways-of-working rules |
+| No Redis, no streaming, no circuit breakers | Explicitly out of scope — backend plumbing, low AI signal |
+
+</details>
+
+<details>
+<summary><b>❌ Explicitly Out of Scope for Phase 6</b></summary>
+<br>
+
+| Feature | Reason deferred |
+|---|---|
+| Autonomous planning / DAG validation | SaaS-level complexity, not the story |
+| Redis caching | Backend plumbing, low AI portfolio signal |
+| NDJSON streaming / WebSocket | No frontend streaming required for demo |
+| Circuit breakers | Production concern |
+| Crash recovery for stuck workflows | Requires task queue — out of scope |
+| OpenTelemetry / Prometheus | Deployment concern |
+| 9-dimension scoring engine | Phase 5 scoring sufficient |
+| LangChain integration | Contradicts "built from first principles" story |
 
 </details>
 
 <br>
 
-> **Milestone:** CoFoundr AI accepts one startup idea and autonomously plans, researches, scores, and assembles a cited report without requiring manual workflow decisions.
+> **Milestone:** Register → create startup → upload PDF → send message → submit workflow → view report. All through a REST API with persistent memory and startup-scoped RAG.
 
 ---
 
@@ -506,9 +538,12 @@ Phase 6 has **started**. The focus now shifts from completing the multi-agent fo
 | Multi-Key API Failover & Rate-Limit Handling | Phase 4 | ✅ Unlocked — exponential cooldown, min-wait retry |
 | Multi-Agent Orchestration | Phase 5 | ✅ Unlocked — verified in Phase 5 |
 | Agent Communication & Handoffs | Phase 5 | ✅ Unlocked — shared workflow verified |
-| Long-Term Memory | Phase 6 | 🚀 Started |
-| Autonomous Planning | Phase 6 | 🚀 Started |
-| Production API Design | Phase 6 | 🚀 Started |
+| PostgreSQL + Alembic Migrations | Phase 6 | 🚀 In Progress |
+| FastAPI REST API + JWT Auth | Phase 6 | 🚀 In Progress |
+| Persistent Memory (LLM extraction + ChromaDB) | Phase 6 | 🚀 In Progress |
+| Multi-user startup_id isolation | Phase 6 | 🚀 In Progress |
+| Typed Agent Contracts (TaskContext/AgentResult) | Phase 6 | 🚀 In Progress |
+| Async workflow submission + status polling | Phase 6 | 🚀 In Progress |
 
 ---
 
@@ -536,20 +571,26 @@ Phase 6 has **started**. The focus now shifts from completing the multi-agent fo
 
 ---
 
-## 🔜 Starting Phase 6
+## 🔜 Phase 6 Progress
 
 - [x] Phase 5 closed at v5.9.0 with 7/7 focused intent workflows passing
 - [x] Final `full_analysis` verified with 0 workflow errors
-- [ ] Define the Phase 6 persistent-memory contract
-- [ ] Design autonomous goal decomposition and planning state
-- [ ] Define startup scoring dimensions and aggregation
-- [ ] Establish Phase 6 observability and performance baseline
-- [ ] Evaluate async execution against the current Phase 5 workflow
-- [ ] Design the FastAPI service boundary
-
+- [x] Phase 6 scope redesigned — portfolio signal over SaaS completeness
+- [x] All 7 sub-phase implementation manuals created (SP-01 through SP-07)
+- [x] Feature list frozen: 5 tables, JWT auth, FastAPI, memory system, RAG polish, agent contracts
+- [x] .env.example updated for Phase 6
+- [x] requirements.txt updated for Phase 6
+- [x] constants.py updated for Phase 6
+- [ ] SP-01 — Database Foundation (Days 1–2.5)
+- [ ] SP-02 — Infrastructure (Days 2.5–3.5)
+- [ ] SP-03 — Auth + FastAPI (Days 3.5–6)
+- [ ] SP-04 — Core Resource APIs (Days 6–9)
+- [ ] SP-05 — Memory + RAG (Days 9–12)
+- [ ] SP-06 — Orchestration (Days 12–14)
+- [ ] Polish + Frontend + v6.0.0 tag (Day 15)
 
 <div align="center">
 
-<sub>CoFoundr AI v5.9.0 — Phase 5 Closed | Phase 6 Started</sub>
+<sub>CoFoundr AI v5.9.0 — Phase 5 Closed | Phase 6 In Progress</sub>
 
 </div>

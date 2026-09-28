@@ -1,45 +1,54 @@
-# ── Secrets ───────────────────────────────────────────
+# ── Secrets ────────────────────────────────────────────
 .env
+.env.*
+!.env.example
 _env
 
-# ── Personal / Local Only ─────────────────────────────
+# ── Personal / Local Only ──────────────────────────────
 notes.txt
 REVISION_GUIDE.md
-Phase4.md
-template.md
 
-# ── Database ──────────────────────────────────────────
-data/BM25
+# ── Database & Persistent Data ─────────────────────────
+data/BM25/
 data/chroma_db/
+data/chroma_data/
+data/file_storage/
+data/outputs/
 
-# ── Input ──────────────────────────────────────────
+# ── Input ──────────────────────────────────────────────
 inputs/
 
-# ── Output ──────────────────────────────────────────
-data/outputs
-
-# ── Python Cache ──────────────────────────────────────
+# ── Python Cache ───────────────────────────────────────
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
-*.pyd
 .Python
 
-# ── Virtual Environments ──────────────────────────────
+# ── Virtual Environments ───────────────────────────────
 venv/
 .venv/
 env/
 
-# ── IDE ───────────────────────────────────────────────
+# ── IDE ────────────────────────────────────────────────
 .vscode/
 _vscode/
 .idea/
 
-# ── Build / Package ───────────────────────────────────
+# ── Build / Package ────────────────────────────────────
 dist/
 build/
-*.egg-info/tempCodeRunnerFile.py 
-src/rag/tempCodeRunnerFile.py 
-data/chroma_db/ 
+*.egg-info/
+tempCodeRunnerFile.py
 
-debugging_roadmap.md
+# ── Testing & Coverage ─────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# ── Logs ───────────────────────────────────────────────
+*.log
+
+# ── OS Files ───────────────────────────────────────────
+.DS_Store
+Thumbs.db
