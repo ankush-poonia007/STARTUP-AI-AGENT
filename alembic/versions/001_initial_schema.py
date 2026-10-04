@@ -107,4 +107,33 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_users_updated_at'), table_name='users')
     op.drop_index(op.f('ix_users_created_at'), table_name='users')
     op.drop_table('users')
+
+    # PostgreSQL ENUM types are schema-level objects.
+    # Dropping their dependent tables does not remove the ENUM types.
+    bind = op.get_bind()
+
+    sa.Enum(
+        'USER',
+        'ASSISTANT',
+        'SYSTEM',
+        name='messagerole',
+    ).drop(bind, checkfirst=True)
+
+    sa.Enum(
+        'STARTUP_FACT',
+        'PREFERENCE',
+        'DECISION',
+        'GOAL',
+        'CONSTRAINT',
+        name='memorytype',
+    ).drop(bind, checkfirst=True)
+
+    sa.Enum(
+        'IDEA',
+        'MVP',
+        'TRACTION',
+        'GROWTH',
+        name='startupstage',
+    ).drop(bind, checkfirst=True)
+
     # ### end Alembic commands ###
