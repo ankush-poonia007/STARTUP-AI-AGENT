@@ -61,6 +61,11 @@ TAVILY_API_KEYS = [
 ]
 TAVILY_API_KEYS = [k for k in TAVILY_API_KEYS if k]
 
+# ── DATABASE API KEYS ───────────────────────────────────────────────────────────
+DATABASE_URL = os.getenv("DATABASE_URL")
+ALEMBIC_DATABASE_URL = os.getenv("ALEMBIC_DATABASE_URL")
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
 
 if __name__ == "__main__":
     print("Phase 5 settings loaded.")

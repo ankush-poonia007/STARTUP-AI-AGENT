@@ -52,3 +52,6 @@ htmlcov/
 # ── OS Files ───────────────────────────────────────────
 .DS_Store
 Thumbs.db
+
+sub_docs
+sub_docs/*
