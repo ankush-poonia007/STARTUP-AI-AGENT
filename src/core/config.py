@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     chroma_persist_directory: str
     chroma_collection_name: str = "cofoundr_documents"
     chroma_memory_collection_name: str = "cofoundr_memories"
-
+    rag_embedding_batch_size: int = 15
+    
     # ── FILE STORAGE ──────────────────────────────────────────────────────────
     file_storage_path: str
     max_file_size_bytes: int = 52_428_800
