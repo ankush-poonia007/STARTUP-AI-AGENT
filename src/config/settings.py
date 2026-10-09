@@ -61,6 +61,10 @@ TAVILY_API_KEYS = [
 ]
 TAVILY_API_KEYS = [k for k in TAVILY_API_KEYS if k]
 
+# ── TAVILY API KEYS ───────────────────────────────────────────────────────────
+JINA_API_KEY = os.getenv("JINA_API_KEY")
+JINA_RERANKER_MODEL = "jina-reranker-v2-base-multilingual"
+
 # ── DATABASE API KEYS ───────────────────────────────────────────────────────────
 DATABASE_URL = os.getenv("DATABASE_URL")
 ALEMBIC_DATABASE_URL = os.getenv("ALEMBIC_DATABASE_URL")
