@@ -507,15 +507,37 @@ def test_migration_upgrade():
     assert upgrade.returncode == 0
     
     
+
 def test_migration_downgrade():
+    # Pass the test database URL to Alembic without changing global settings.
     env = os.environ.copy()
     env["DATABASE_URL"] = TEST_DATABASE_URL
 
-    result = subprocess.run(
-        ["alembic", "downgrade", "base"],
-        env=env,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        # Verify that the migration can downgrade the schema to its base.
+        result = subprocess.run(
+            ["alembic", "downgrade", "base"],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
 
-    assert result.returncode == 0
+        # Include Alembic output when the downgrade fails.
+        assert result.returncode == 0, (
+            f"Downgrade failed:\n{result.stdout}\n{result.stderr}"
+        )
+
+    finally:
+        # Restore the schema even if the downgrade assertion fails.
+        restore = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        # Never silently accept a failed schema restoration.
+        assert restore.returncode == 0, (
+            f"Schema restoration failed:\n"
+            f"{restore.stdout}\n{restore.stderr}"
+        )
