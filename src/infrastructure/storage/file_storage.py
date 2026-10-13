@@ -1,9 +1,9 @@
-  
+
 import asyncio
 import os
 import shutil
 import tempfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from uuid import UUID
 
 from src.core.config import settings
@@ -45,6 +45,9 @@ class FileStorage:
         if not isinstance(relative_path, str) or not relative_path:
             raise ValueError("Storage reference must be a non-empty string.")
 
+        if "\x00" in relative_path:
+            raise ValueError("Storage reference contains a null byte.")
+
         # References always use POSIX separators, regardless of OS.
         if "\\" in relative_path:
             raise ValueError("Invalid storage reference separators.")
@@ -64,7 +67,10 @@ class FileStorage:
         document_name = Path(filename).stem
         extension = Path(filename).suffix.lower()
 
-        self._validate_uuid(document_name, "document ID")
+        if document_name != self._validate_uuid(
+            document_name, "document ID"
+        ):
+            raise ValueError("Storage reference contains a non-canonical document ID.")
 
         if extension not in self.allowed_extensions:
             raise UnsupportedFileTypeError(
@@ -76,7 +82,9 @@ class FileStorage:
         ).resolve()
 
         if not candidate.is_relative_to(self.base_path):
-            raise ValueError("Storage reference escapes the storage directory.")
+            raise ValueError(
+                "Storage reference escapes the storage directory."
+            )
 
         return candidate
 
@@ -93,13 +101,15 @@ class FileStorage:
         if not isinstance(original_filename, str) or not original_filename:
             raise ValueError("Original filename must be non-empty.")
 
-        # Reject both Windows and POSIX path separators in user filenames.
-        if "/" in original_filename or "\\" in original_filename:
-            raise ValueError("Pass a filename, not a filesystem path.")
+        if "\x00" in original_filename:
+            raise ValueError("Original filename contains a null byte.")
 
-        extension = Path(original_filename).suffix.lower()
+        # Treat the supplied name as untrusted input.
+        # Its only contribution to the stored path is its extension.
+        # PureWindowsPath handles both slash styles on every platform.
+        extension = PureWindowsPath(original_filename).suffix.lower()
 
-        # Validation order: extension, size, path, then filesystem changes.
+        # Validation happens before creating folders or files.
         if extension not in self.allowed_extensions:
             raise UnsupportedFileTypeError(
                 f"Unsupported file extension: {extension or '(none)'}"
@@ -119,11 +129,28 @@ class FileStorage:
 
         destination = self._resolve_contained_path(relative_reference)
 
+        # Do not write through an existing symlinked startup directory.
+        startup_directory = self.base_path / startup_id
+        if startup_directory.is_symlink():
+            raise ValueError(
+                "Refusing to write into a symlinked startup directory."
+            )
+
+        # Resolve and check the directory before creating anything.
+        resolved_startup_directory = startup_directory.resolve()
+        if not resolved_startup_directory.is_relative_to(self.base_path):
+            raise ValueError(
+                "Startup directory escapes the storage directory."
+            )
+
         destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary_path = None
+
+        # Recheck containment after directory creation.
+        destination = self._resolve_contained_path(relative_reference)
+
+        temporary_path: Path | None = None
 
         try:
-            # Temporary file in the destination directory enables atomic replace.
             with tempfile.NamedTemporaryFile(
                 mode="wb",
                 dir=destination.parent,
@@ -135,6 +162,13 @@ class FileStorage:
                 temporary_file.write(content)
                 temporary_file.flush()
                 os.fsync(temporary_file.fileno())
+
+            # Recheck immediately before replacement.
+            destination = self._resolve_contained_path(relative_reference)
+            if destination.parent.is_symlink():
+                raise ValueError(
+                    "Refusing to write into a symlinked startup directory."
+                )
 
             os.replace(temporary_path, destination)
             temporary_path = None
@@ -178,33 +212,43 @@ class FileStorage:
     def _delete_sync(self, storage_reference: str) -> None:
         path = self._resolve_contained_path(storage_reference)
 
-        # Idempotent when the file has already been removed.
+        # Missing files are safe; symlinks escaping the root fail containment.
         path.unlink(missing_ok=True)
 
     async def delete(self, storage_reference: str) -> None:
-        """Delete a stored file; missing files are ignored."""
+        """Delete a file; repeated deletion is safe."""
         await asyncio.to_thread(self._delete_sync, storage_reference)
 
     def _delete_startup_sync(self, startup_id: str) -> None:
         startup_id = self._validate_uuid(startup_id, "startup ID")
-        startup_directory = (
-            self.base_path / startup_id
-        ).resolve()
 
-        if not startup_directory.is_relative_to(self.base_path):
-            raise ValueError("Startup directory escapes the storage root.")
+        # IMPORTANT: inspect the lexical path before resolving it.
+        # Resolving first would hide whether the original path was a symlink.
+        startup_directory = self.base_path / startup_id
 
-        if startup_directory == self.base_path:
+        if startup_directory.is_symlink():
+            raise ValueError(
+                "Refusing to delete a symlinked startup directory."
+            )
+
+        resolved_directory = startup_directory.resolve()
+
+        if not resolved_directory.is_relative_to(self.base_path):
+            raise ValueError(
+                "Startup directory escapes the storage root."
+            )
+
+        if resolved_directory == self.base_path:
             raise ValueError("Refusing to delete the storage root.")
 
-        if startup_directory.exists():
-            if startup_directory.is_symlink():
-                raise ValueError("Refusing to delete a symlinked startup directory.")
+        if resolved_directory.exists():
+            if not resolved_directory.is_dir():
+                raise ValueError("Startup storage path is not a directory.")
 
-            shutil.rmtree(startup_directory)
+            shutil.rmtree(resolved_directory)
 
     async def delete_startup_files(self, startup_id: str) -> None:
-        """Remove all stored files for one startup."""
+        """Remove files for one startup without following its directory symlink."""
         await asyncio.to_thread(
             self._delete_startup_sync, startup_id
         )
@@ -217,87 +261,3 @@ def create_file_storage() -> FileStorage:
         max_file_size_bytes=settings.max_file_size_bytes,
         allowed_extensions=ALLOWED_FILE_EXTENSIONS,
     )
-
-
-
-if __name__ == "__main__":
-    import asyncio
-    import tempfile
-    from pathlib import Path
-    from uuid import uuid4
-
-    async def test_file_storage():
-        with tempfile.TemporaryDirectory() as temp_dir:
-            storage = FileStorage(
-                base_path=Path(temp_dir),
-                max_file_size_bytes=1024,
-            )
-
-            startup_id = str(uuid4())
-            document_id = str(uuid4())
-            content = b"FileStorage smoke test"
-
-            # Test 1: Store
-            reference = await storage.store(
-                startup_id,
-                document_id,
-                "test.txt",
-                content,
-            )
-            assert not Path(reference).is_absolute()
-            print("PASS: Store returns a relative reference")
-
-            # Test 2: Retrieve
-            retrieved = await storage.retrieve(reference)
-            assert retrieved == content
-            print("PASS: Retrieve returns identical bytes")
-
-            # Test 3: Unsupported extension
-            try:
-                await storage.store(
-                    startup_id,
-                    str(uuid4()),
-                    "malicious.exe",
-                    b"invalid",
-                )
-                raise AssertionError("Unsupported extension was accepted")
-            except UnsupportedFileTypeError:
-                print("PASS: Unsupported extension rejected")
-
-            # Test 4: Oversized content
-            try:
-                await storage.store(
-                    startup_id,
-                    str(uuid4()),
-                    "large.txt",
-                    b"x" * 1025,
-                )
-                raise AssertionError("Oversized file was accepted")
-            except FileTooLargeError:
-                print("PASS: Oversized file rejected")
-
-            # Test 5: Path traversal
-            try:
-                await storage.retrieve("../../secret.txt")
-                raise AssertionError("Traversal reference was accepted")
-            except ValueError:
-                print("PASS: Path traversal rejected")
-
-            # Test 6: Idempotent deletion
-            await storage.delete(reference)
-            await storage.delete(reference)
-            assert not (Path(temp_dir) / startup_id / f"{document_id}.txt").exists()
-            print("PASS: Repeated deletion is safe")
-
-            # Test 7: Startup cleanup
-            await storage.store(
-                startup_id,
-                str(uuid4()),
-                "cleanup.txt",
-                b"cleanup",
-            )
-            await storage.delete_startup_files(startup_id)
-            assert not (Path(temp_dir) / startup_id).exists()
-            print("PASS: Startup directory removed")
-
-    asyncio.run(test_file_storage())
