@@ -18,6 +18,7 @@ Agents should interact with Gemini through the shared gemini_tool instance.
 """
 
 from google import genai
+from google.genai import types
 
 from src.config.settings import (
     GEMINI_API_KEYS,
@@ -42,67 +43,80 @@ class GeminiTool:
             GEMINI_API_KEYS
         )
 
+    
     def generate_embedding(
         self,
         chunks: list[dict],
+        task_type: str | None = None,
     ) -> list:
-        """
-        Generate embeddings for the supplied text chunks.
+            """
+            Generate embeddings for the supplied text chunks.
 
-        Parameters
-        ----------
-        chunks : list[dict]
-            Chunks containing a "text" field.
+            Parameters
+            ----------
+            chunks : list[dict]
+                Chunks containing a "text" field.
 
-        Returns
-        -------
-        list
-            Embedding vectors returned by Gemini.
+            task_type : str | None, optional
+                Gemini embedding task type, such as
+                "RETRIEVAL_DOCUMENT" or "RETRIEVAL_QUERY".
+                None preserves the existing API call behavior.
 
-        Raises
-        ------
-        ToolConnectionError
-            When the selected Gemini API key is rate limited.
-        """
+            Returns
+            -------
+            list
+                Embedding vectors returned by Gemini.
+            """
+            text = [
+                chunk["text"]
+                for chunk in chunks
+            ]
 
-        text = [
-            chunk["text"]
-            for chunk in chunks
-        ]
+            api_key = self._get_next_key()
 
-        api_key = self._get_next_key()
-
-        client = genai.Client(
-            api_key=api_key
-        )
-
-        try:
-            response = client.models.embed_content(
-                model=EMBEDDING_MODEL,
-                contents=text
+            client = genai.Client(
+                api_key=api_key
             )
 
-        except Exception as error:
-            status_code = getattr(error, "status_code", None)
-            error_code = getattr(error, "code", None)
+            try:
+                if task_type is None:
+                    # Preserve the original Phase 5 call exactly.
+                    response = client.models.embed_content(
+                        model=EMBEDDING_MODEL,
+                        contents=text,
+                    )
+                else:
+                    # Phase 6: explicitly configure the embedding task.
+                    response = client.models.embed_content(
+                        model=EMBEDDING_MODEL,
+                        contents=text,
+                        config=types.EmbedContentConfig(
+                            task_type=task_type,
+                        ),
+                    )
 
-            if (
-                status_code == 429
-                or error_code == "rate_limit_exceeded"
-            ):
-                raise ToolConnectionError(
-                    "Gemini API key rate limit reached."
-                ) from error
+            except Exception as error:
+                status_code = getattr(error, "status_code", None)
+                error_code = getattr(error, "code", None)
 
-            raise
+                if (
+                    status_code == 429
+                    or error_code == "rate_limit_exceeded"
+                ):
+                    raise ToolConnectionError(
+                        "Gemini API key rate limit reached."
+                    ) from error
 
-        finally:
-            client.close()
+                raise
 
-        return [
-            content.values
-            for content in response.embeddings
-        ]
+            finally:
+                client.close()
+
+            return [
+                content.values
+                for content in response.embeddings
+            ]
+
 
     def generate_text(
         self,

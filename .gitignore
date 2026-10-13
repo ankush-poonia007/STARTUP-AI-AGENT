@@ -12,13 +12,17 @@ REVISION_GUIDE.md
 data/BM25/
 data/chroma_db/
 data/chroma_data/
+data/chroma_p6/
 data/file_storage/
 data/outputs/
+
+# ── Phase 6 File Storage ────────────────────────────────
+file_storage/
 
 # ── Input ──────────────────────────────────────────────
 inputs/
 
-# ── Python Cache ───────────────────────────────────────
+# ── Python Cache ─────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
@@ -53,5 +57,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# ── Sub Documents ────────────────────────────────────────
 sub_docs
 sub_docs/*
