@@ -15,7 +15,7 @@ Key rotation and retry behavior remain in GeminiTool.
 
 import asyncio
 import logging
-import os
+
 from typing import Any
 
 from src.core.config import settings
@@ -141,10 +141,7 @@ class Embedder:
 
         all_vectors: list[list[float]] = []
 
-        is_development = (
-            os.getenv("ENVIRONMENT", "development").lower()
-            == "development"
-        )
+        is_development = settings.environment.lower() == "development"
 
         for start in range(0, len(texts), self._batch_size):
             batch = texts[start : start + self._batch_size]

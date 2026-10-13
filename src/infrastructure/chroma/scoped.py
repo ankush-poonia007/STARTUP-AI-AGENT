@@ -306,30 +306,39 @@ def deactivate_document(
     return len(record_ids)
 
 
+
 def delete_by_startup(
     collection: Collection,
     startup_id: str | UUID,
 ) -> int:
     """
-    Delete every Chroma record belonging to one startup.
+    Delete every Chroma record belonging to one startup in bounded batches.
 
     This does not delete PostgreSQL rows or files on disk.
     Returns the number of records selected for deletion.
     """
     normalized_startup_id = validate_startup_id(startup_id)
+    where = {"startup_id": normalized_startup_id}
+    batch_size = 500
+    deleted_count = 0
 
-    existing = collection.get(
-        where={"startup_id": normalized_startup_id},
-        include=[],
-    )
+    while True:
+        existing = collection.get(
+            where=where,
+            limit=batch_size,
+            include=[],
+        )
 
-    record_ids = existing["ids"]
+        record_ids = existing["ids"]
 
-    if not record_ids:
-        return 0
+        if not record_ids:
+            break
 
-    collection.delete(ids=record_ids)
-    return len(record_ids)
+        collection.delete(ids=record_ids)
+        deleted_count += len(record_ids)
+
+    return deleted_count
+
 
 
 if __name__ == "__main__":
