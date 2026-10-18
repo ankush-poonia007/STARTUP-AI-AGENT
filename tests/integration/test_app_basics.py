@@ -31,6 +31,7 @@ from src.middleware.exception_handler import (
     validation_exception_handler,
 )
 from src.middleware.request_id import RequestIDMiddleware
+from src.core.exceptions import InvalidToken
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
@@ -211,3 +212,121 @@ def test_unhandled_exception_returns_safe_500(client, caplog):
     assert request_id in caplog.text
     assert "GET" in caplog.text
     assert "/test/crash" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_real_app_health_routes(async_api):
+    client, _ = async_api
+
+    live = await client.get("/api/v1/health/live")
+    ready = await client.get("/api/v1/health/ready")
+
+    assert live.status_code == 200
+    assert live.json() == {"status": "ok"}
+    assert ready.status_code == 200
+    assert ready.json() == {
+        "status": "ok",
+        "dependencies": {"postgres": "ok", "chroma": "ok"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_request_id_and_cors_for_real_app(async_api):
+    client, _ = async_api
+    allowed_origin = "http://localhost:3000"
+
+    provided = await client.get(
+        "/api/v1/health/live",
+        headers={"X-Request-ID": "abc-123", "Origin": allowed_origin},
+    )
+    assert provided.headers["X-Request-ID"] == "abc-123"
+    assert provided.headers["access-control-allow-origin"] == allowed_origin
+    assert "X-Request-ID" in provided.headers["access-control-expose-headers"]
+
+    preflight = await client.options(
+        "/api/v1/auth/me",
+        headers={
+            "Origin": allowed_origin,
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == allowed_origin
+    assert "authorization" in preflight.headers[
+        "access-control-allow-headers"
+    ].lower()
+
+    disallowed = await client.get(
+        "/api/v1/health/live",
+        headers={"Origin": "http://evil.example"},
+    )
+    assert "access-control-allow-origin" not in disallowed.headers
+
+
+@pytest.mark.asyncio
+async def test_real_app_error_envelopes_and_server_error_request_id(
+    async_api,
+    caplog,
+):
+    client, app = async_api
+
+    async def unauthorized():
+        raise InvalidToken()
+
+    async def crash():
+        raise RuntimeError("PRIVATE_INTEGRATION_DIAGNOSTIC")
+
+    app.add_api_route("/test/unauthorized", unauthorized, methods=["GET"])
+    app.add_api_route("/test/crash", crash, methods=["GET"])
+
+    unauthorized_response = await client.get(
+        "/test/unauthorized",
+        headers={"Origin": "http://localhost:3000"},
+    )
+    assert unauthorized_response.status_code == 401
+    assert unauthorized_response.json()["error"]["code"] == "INVALID_TOKEN"
+    assert unauthorized_response.headers.get("access-control-allow-origin")
+
+    with caplog.at_level(logging.ERROR):
+        crash_response = await client.get("/test/crash")
+
+    assert crash_response.status_code == 500
+    assert crash_response.json()["error"]["code"] == "INTERNAL_ERROR"
+    assert "PRIVATE_INTEGRATION_DIAGNOSTIC" not in crash_response.text
+    assert crash_response.json()["error"]["request_id"] == (
+        crash_response.headers.get("X-Request-ID")
+    )
+    assert crash_response.json()["error"]["request_id"] in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_readiness_failure_is_degraded_without_leaking_details(
+    async_api,
+    monkeypatch,
+):
+    from src.api.routers import health
+
+    client, _ = async_api
+
+    async def postgres_error(engine):
+        return "error"
+
+    async def chroma_error(chroma_client):
+        return "error"
+
+    monkeypatch.setattr(health, "_check_postgres", postgres_error)
+    monkeypatch.setattr(health, "_check_chroma", chroma_error)
+
+    ready = await client.get("/api/v1/health/ready")
+    live = await client.get("/api/v1/health/live")
+
+    assert ready.status_code == 503
+    assert ready.json() == {
+        "status": "degraded",
+        "dependencies": {"postgres": "error", "chroma": "error"},
+    }
+    assert "localhost" not in ready.text
+    assert "postgresql" not in ready.text.lower()
+    assert live.status_code == 200
+    assert live.json() == {"status": "ok"}
