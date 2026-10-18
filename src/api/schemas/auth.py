@@ -78,3 +78,9 @@ class AccessTokenResponse(BaseModel):
 
     access_token: str
     token_type: Literal["bearer"] = "bearer"
+
+
+class LogoutResponse(BaseModel):
+    """Empty response returned after logout."""
+
+    model_config = ConfigDict(extra="forbid")

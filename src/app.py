@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exceptions import RequestValidationError
 
+from src.api.routers.auth import router as auth_router
 from src.api.routers.health import router as health_router
 from src.core.config import Settings, settings
 from src.core.exceptions import AppException
@@ -164,6 +165,10 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
 
     application.include_router(
         health_router,
+        prefix="/api/v1",
+    )
+    application.include_router(
+        auth_router,
         prefix="/api/v1",
     )
 
