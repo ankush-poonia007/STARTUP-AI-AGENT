@@ -17,6 +17,7 @@ from src.repositories.models import (
     conversation,
     message,
     memory,
+    refresh_token,
 )
 
 

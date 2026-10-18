@@ -9,6 +9,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## 📑 Table of Contents
 
 - [v5.9.0 — Phase 5 Closure](#v590--2026-08-28--phase-5-closure)
+- [SP-03 — Authentication API](#sp-03--authentication-api)
 - [Unreleased / Deferred](#unreleased--deferred)
 - [v5.8.0 — Provider Hardening, API-Key Rotation & Integration Verification](#v580--2026-08-27--provider-hardening-api-key-rotation--integration-verification)
 - [v5.7.0 — LLM Judge & Workflow Validation](#v570--2026-08-27--llm-judge--workflow-validation)
@@ -36,6 +37,24 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - [v1.0.0 — Phase 1 Complete](#v100--2026-06-01--phase-1-complete)
 
 ---
+
+## SP-03 — Authentication API
+
+### Added
+- FastAPI application factory and lifespan wiring, request IDs, CORS, error handlers, and `/api/v1` health and authentication routes.
+- JWT access-token authentication, Argon2id password hashing, and registration, login, refresh, logout, and current-user endpoints.
+- Persisted refresh tokens as SHA-256 hashes with migration `002`; added repository, schema, service, dependency, route, and integration tests.
+- `uvicorn[standard]` and `email-validator` dependencies.
+
+### Changed
+- Database sessions are created in the application lifespan and resolved from `app.state`; refresh tokens intentionally do not rotate.
+
+### Verified
+- Full test suite: 188 passed, 2 skipped.
+- Phase 5 `general_chat` and `pdf_request` CLI checks passed.
+- Fresh temporary database migrated successfully through Alembic head.
+- D6 timing check: 91.6 ms wrong-password mean vs. 90.9 ms unknown-email mean (10 attempts each).
+- PyJWT reports that the configured HS256 key is below its recommended 32-byte length; replace it with a random key of at least 32 bytes before deployment.
 
 ## [v5.9.0] — 2026-08-28 — Phase 5 Closure
 
@@ -71,7 +90,7 @@ Every item explicitly punted to a future phase, consolidated here so nothing sta
 | Item | Originally Logged | Target |
 |---|---|---|
 | Multi-agent orchestration (specialist sub-agents) | v4.0.0 | ✅ Complete — Phase 5 |
-| FastAPI REST service layer | v3.0.0 | Phase 6 |
+| FastAPI REST service layer | v3.0.0 | ✅ Complete — SP-03 |
 | SQLite persistent conversation history | v1.0.0 | Phase 6 |
 | `embed_and_store()` per-chunk upsert (currently fails whole batch on any duplicate ID) | v3.5.0 | Backlog |
 | `task_type` parameter (`RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY`) for `embed_content()` calls | v3.5.0 | Backlog |

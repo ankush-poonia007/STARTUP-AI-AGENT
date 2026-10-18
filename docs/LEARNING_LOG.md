@@ -25,7 +25,7 @@ Phase 2 ✅ Complete
 Phase 3 ✅ Complete — Closed
 Phase 4 ✅ Complete
 Phase 5 ✅ Complete — Closed
-Phase 6 📋 Planned
+Phase 6 🚧 In Progress — SP-03 complete
 ```
 
 ---
@@ -892,12 +892,21 @@ Intent-based integration verification
 
 ## 📋 Phase 6 Log — Autonomous Platform
 
-**Status:** Not Started
+**Status:** In progress — SP-03 authentication API complete and verified; later Phase 6 subphases remain.
+
+### SP-03 — Authentication API
+- Added an app factory and lifespan-managed database, Chroma, storage, and embedder wiring; app imports remain free of startup I/O.
+- Implemented readiness/liveness probes, JWT authentication, Argon2id password hashing, hashed refresh-token persistence, and auth routes including `/auth/me`.
+- Locked outcomes D1–D8 are recorded in `docs/ARCHITECTURE_DECISIONS.md`. Refresh-token rotation is intentionally absent; a stolen token remains usable until expiry or logout.
+- Verification: full suite 188 passed / 2 skipped; Phase 5 `general_chat` and `pdf_request` both passed; fresh migration chain passed; D6 login means were 91.6 ms and 90.9 ms (10 attempts each).
+- Security checklist evidence: Argon2id hashes are stored and not serialized; hashing/verification run in worker threads; refresh tokens are stored as SHA-256 hashes; login failures share the same error and comparable measured timing; access-token type and configured algorithm are checked; application errors use safe envelopes; CORS credentials are disabled.
+- Deployment action: PyJWT warned that the configured HS256 key is shorter than its recommended 32 bytes. Replace it with a randomly generated key of at least 32 bytes before deployment; the secret was not changed or copied into documentation.
+- One initial full-suite run reported five auth failures due to a missing `users` table, while the following full run passed (188 passed, 2 skipped). The cause was not established; do not treat the rerun as proof of root cause.
 
 ### Concepts To Learn
 - [ ] Long-term memory with SQLite
 - [ ] asyncio fundamentals — event loops, coroutines, `gather()`
-- [ ] FastAPI REST layer
+- [x] FastAPI REST layer — SP-03 implementation complete
 - [ ] Dynamic planning and goal decomposition
 - [ ] Startup scoring rubric (0–100)
 
@@ -973,6 +982,10 @@ Intent-based integration verification
 | Phase 5 | Structured-output construction mixed prompt data with response schema configuration | Provider request concerns were not cleanly separated | Keep prompt content and schema configuration separate |
 | Phase 5 | Handled agent failures could disappear from downstream validation | Error handling returned control without preserving failure state | Errors must remain observable in shared workflow state |
 | Phase 5 | Integration success could be inferred from intent alone | A correct route could still hide workflow errors | Require expected intent plus zero recorded workflow errors |
+| Phase 6 / SP-03 | Alembic was unavailable to subprocess-based checks when the virtual environment Scripts directory was not on PATH | The shell had the project interpreter but not its command entry points | Add `.venv\Scripts` to PATH for repository test and migration commands |
+| Phase 6 / SP-03 | A portability assertion used a status constant not exposed by the installed FastAPI version | Assumed a framework-level alias existed across versions | Use the standard-library `HTTPStatus` constant for portable HTTP status values |
+| Phase 6 / SP-03 | One full-suite run failed auth tests with a missing `users` table, then the rerun passed | Test/migration state can make a one-off failure difficult to diagnose | Capture the migration state and rerun before concluding; keep the anomaly unresolved until reproduced and explained |
+| Phase 6 / SP-03 | PyJWT warned that the configured HS256 key was shorter than its recommendation | Local configuration had not been checked against the library's key-strength guidance | Use a randomly generated key of at least 32 bytes before deployment; never print or commit the key |
 
 ---
 

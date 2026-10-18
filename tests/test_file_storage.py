@@ -2,7 +2,7 @@
 import pytest
 from uuid import uuid4
 
-from src.core.exceptions import FileTooLargeError, UnsupportedFileTypeError
+from src.core.exceptions import FileTooLarge, UnsupportedFileType
 from src.infrastructure.storage.file_storage import FileStorage
 
 
@@ -30,7 +30,7 @@ async def test_store_and_retrieve_preserves_bytes(storage):
 
 @pytest.mark.asyncio
 async def test_rejects_unsupported_extension_before_writing(storage):
-    with pytest.raises(UnsupportedFileTypeError):
+    with pytest.raises(UnsupportedFileType):
         await storage.store(
             str(uuid4()), str(uuid4()), "report.exe", b"content"
         )
@@ -40,7 +40,7 @@ async def test_rejects_unsupported_extension_before_writing(storage):
 
 @pytest.mark.asyncio
 async def test_rejects_oversized_content_before_writing(storage):
-    with pytest.raises(FileTooLargeError):
+    with pytest.raises(FileTooLarge):
         await storage.store(
             str(uuid4()), str(uuid4()), "report.pdf", b"x" * 17
         )
@@ -150,6 +150,6 @@ async def test_hostile_filename_cannot_escape_storage_directory(storage, tmp_pat
     ],
 )
 async def test_tampered_storage_reference_is_rejected(storage, reference):
-    with pytest.raises((ValueError, UnsupportedFileTypeError)):
+    with pytest.raises((ValueError, UnsupportedFileType)):
         await storage.retrieve(reference)
         

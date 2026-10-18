@@ -10,6 +10,7 @@ pydantic-settings                   # Phase 6 centralised config (src/core/confi
 
 # ── FastAPI ───────────────────────────────────────────────────
 fastapi[all]                        # API framework + uvicorn + pydantic v2
+uvicorn[standard]                   # ASGI server with standard performance extras
 python-multipart                    # multipart/form-data for file uploads
 
 # ── Database ──────────────────────────────────────────────────
@@ -21,6 +22,7 @@ psycopg2-binary                     # Sync driver for Alembic migrations only
 # ── Authentication ────────────────────────────────────────────
 PyJWT                               # JWT access token creation + validation
 argon2-cffi                         # Argon2id password hashing
+email-validator                    # Pydantic email address validation
 
 # ── LLM Providers ─────────────────────────────────────────────
 openai                              # OpenRouter via OpenAI-compatible API
