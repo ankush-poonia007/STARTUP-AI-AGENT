@@ -101,3 +101,24 @@ When implementation reveals a genuine architectural problem:
 *Proposed Change* : Require a valid `startup_id` for every scoped Phase 6 operation; stamp writes with that ID; filter reads by it; combine it and any additional metadata filters using `$and`; keep deactivation and deletion startup-scoped; and ensure active queries exclude inactive records.<br>
 *Approval* : Pending.<br>
 *Resolution* : The scoped helpers implement several of these requirements, but automatic active-record filtering and acceptance verification remain pending. No test result is asserted here.
+
+## SP-03 — Authentication API Decisions and Verification
+
+SP-03 follows the eight locked decisions in `sub_docs/03_SP03_IMPLEMENTATION_GUIDE.md` (all Option A):
+
+| Decision | Implemented outcome |
+|---|---|
+| D1 — Database lifecycle | The lifespan creates the engine and session factory, stores them on `app.state`, and `get_db` reads the factory from request state. |
+| D2 — Refresh-token rotation | Refresh returns a new access token only. The refresh token remains valid until expiry or logout; a stolen token can therefore be used until then. Rotation and reuse detection are intentionally deferred because they require an API-contract and concurrency design change. |
+| D3 — Logout | Logout returns 200 idempotently and revokes only an active refresh token owned by the authenticated user. |
+| D4 — ASGI entry point | `src.app` exports the module-level `app = create_app()`; the documented launch command is `uvicorn src.app:app`. Importing the module does not perform startup I/O. |
+| D5 — Security configuration | `security.py` receives secret, algorithm, and expiry values as parameters; it does not read settings. |
+| D6 — Login timing | Unknown-email login performs and discards an Argon2 hash. The measured means were 91.6 ms for known-email wrong-password attempts and 90.9 ms for unknown-email attempts (10 each; ratio 1.01×). |
+| D7 — CORS | `allow_credentials=False`; token use is through the Authorization header. |
+| D8 — Protected identity route | `GET /api/v1/auth/me` validates the access token and returns the authenticated user. |
+
+Passwords are stored as Argon2id hashes; refresh tokens are stored as deterministic SHA-256 hashes, never as raw tokens. JWT decoding pins the configured algorithm and validates `token_type`. The configured HS256 key triggered PyJWT's warning that it is shorter than the recommended 32 bytes; replace it with a randomly generated key of at least 32 bytes before deployment. The key value is intentionally not recorded here.
+
+Authentication failures use 401. The resource-authorization policy for SP-04 is to return 404 rather than 403 for resources the caller must not be able to discover; SP-03 does not yet implement resource ownership routes. Health readiness is the deliberate exception to the shared error envelope: it returns a 503 with a dependency status map for probes.
+
+Verification recorded for this implementation: the full suite passed (188 passed, 2 skipped); both Phase 5 CLI checks passed; timing equalization was measured above; and the full Alembic chain succeeded on a fresh temporary database. The first full-suite attempt had five auth failures reporting a missing `users` table; a subsequent full run passed, and the cause of that first-run anomaly was not established.
