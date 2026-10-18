@@ -42,12 +42,21 @@ from sqlalchemy.pool import NullPool
 
 import pytest
 import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 from src.config import settings
+from src.api.dependencies.auth import get_current_user
+from src.api.dependencies.services import get_auth_service
+from src.app import create_app
+from src.infrastructure.database.session import get_db
+from src.infrastructure.state_keys import (
+    CHROMA_CLIENT_STATE_KEY,
+    ENGINE_STATE_KEY,
+)
 
 # ============================================================
 # TEST DATABASE URL
@@ -76,6 +85,35 @@ TestSessionLocal = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+
+class _HealthyChromaClient:
+    def heartbeat(self) -> int:
+        return 1
+
+
+@pytest_asyncio.fixture
+async def async_api(async_session: AsyncSession):
+    """Provide an ASGI client with a rollback-scoped database session."""
+    app = create_app()
+    setattr(app.state, ENGINE_STATE_KEY, test_engine)
+    setattr(
+        app.state,
+        CHROMA_CLIENT_STATE_KEY,
+        _HealthyChromaClient(),
+    )
+
+    async def override_db() -> AsyncGenerator[AsyncSession, None]:
+        yield async_session
+
+    app.dependency_overrides[get_db] = override_db
+
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        yield client, app
 
 
 # ============================================================
