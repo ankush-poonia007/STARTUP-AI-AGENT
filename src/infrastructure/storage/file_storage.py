@@ -9,8 +9,8 @@ from uuid import UUID
 from src.core.config import settings
 from src.core.constants import ALLOWED_FILE_EXTENSIONS
 from src.core.exceptions import (
-    FileTooLargeError,
-    UnsupportedFileTypeError,
+    FileTooLarge,
+    UnsupportedFileType,
 )
 
 
@@ -73,7 +73,7 @@ class FileStorage:
             raise ValueError("Storage reference contains a non-canonical document ID.")
 
         if extension not in self.allowed_extensions:
-            raise UnsupportedFileTypeError(
+            raise UnsupportedFileType(
                 f"Unsupported file extension: {extension or '(none)'}"
             )
 
@@ -111,7 +111,7 @@ class FileStorage:
 
         # Validation happens before creating folders or files.
         if extension not in self.allowed_extensions:
-            raise UnsupportedFileTypeError(
+            raise UnsupportedFileType(
                 f"Unsupported file extension: {extension or '(none)'}"
             )
 
@@ -119,7 +119,7 @@ class FileStorage:
             raise TypeError("File content must be bytes.")
 
         if len(content) > self.max_file_size_bytes:
-            raise FileTooLargeError(
+            raise FileTooLarge(
                 f"File exceeds the {self.max_file_size_bytes}-byte limit."
             )
 
