@@ -21,6 +21,11 @@ MAX_EMAIL_CHARS: int = 255
 MIN_PASSWORD_CHARS: int = 8
 MAX_PASSWORD_CHARS: int = 128
 
+# ── Authentication & Security ────────────────────────────────────────────────
+ACCESS_TOKEN_TYPE: str = "access"
+REFRESH_TOKEN_BYTE_LENGTH: int = 64
+REQUEST_ID_HEADER: str = "X-Request-ID"
+
 # ── Concurrency ───────────────────────────────────────────────────────────────
 MAX_CONCURRENT_TASKS: int = 5               # Orchestrator parallel agent limit
 
