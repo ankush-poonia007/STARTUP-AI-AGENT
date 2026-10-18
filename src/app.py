@@ -127,7 +127,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
                 logger.info("Database engine disposed.")
 
     application = FastAPI(
-        title="BizRadar AI API",
+        title="CoFoundr AI API",
         lifespan=lifespan,
     )
 
