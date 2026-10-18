@@ -5,8 +5,11 @@ from fastapi import Request
 
 
 DATABASE_SESSION_MAKER_STATE_KEY = "database_session_maker"
+ENGINE_STATE_KEY = "engine"
+SESSION_FACTORY_STATE_KEY = "session_factory"
 CHROMA_DOCUMENTS_STATE_KEY = "chroma_documents"
 CHROMA_MEMORIES_STATE_KEY = "chroma_memories"
+CHROMA_CLIENT_STATE_KEY = "chroma_client"
 FILE_STORAGE_STATE_KEY = "file_storage"
 EMBEDDER_STATE_KEY = "embedder"
 

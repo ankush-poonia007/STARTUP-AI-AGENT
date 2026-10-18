@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure.state_keys import (
     DATABASE_SESSION_MAKER_STATE_KEY,
+    SESSION_FACTORY_STATE_KEY,
 )
 
 
@@ -42,14 +43,22 @@ async def get_db(
     # --------------------------------------------------------
     session_factory = getattr(
         request.app.state,
-        DATABASE_SESSION_MAKER_STATE_KEY,
+        SESSION_FACTORY_STATE_KEY,
         None,
     )
+
+    # Keep compatibility with tests and callers using the original SP-01 key.
+    if session_factory is None:
+        session_factory = getattr(
+            request.app.state,
+            DATABASE_SESSION_MAKER_STATE_KEY,
+            None,
+        )
 
     # Fail clearly if application startup wiring did not run.
     if session_factory is None:
         raise RuntimeError(
-            f"Required app.state.{DATABASE_SESSION_MAKER_STATE_KEY} "
+            f"Required app.state.{SESSION_FACTORY_STATE_KEY} "
             "is missing. Application startup wiring did not run."
         )
 
