@@ -27,6 +27,12 @@ class FakeEngine:
         self.dispose_calls += 1
 
 
+
+class FailingFakeEngine(FakeEngine):
+    def connect(self):
+        raise ConnectionError("Simulated database outage.")
+
+
 class FakeChromaClient:
     def heartbeat(self):
         return 1
@@ -116,3 +122,61 @@ def test_app_lifespan_wires_resources_and_serves_health(monkeypatch):
         assert "access-control-allow-origin" not in hostile_origin.headers
 
     assert engine.dispose_calls == 1
+
+
+
+def test_readiness_degrades_when_postgres_is_unavailable(monkeypatch):
+    app_module = importlib.import_module("src.app")
+
+    engine = FailingFakeEngine()
+    chroma_client = FakeChromaClient()
+
+    monkeypatch.setattr(
+        app_module,
+        "create_database_engine",
+        lambda database_url: engine,
+    )
+    monkeypatch.setattr(
+        app_module,
+        "create_session_factory",
+        lambda database_engine: object(),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "create_chroma_client",
+        lambda persist_directory: chroma_client,
+    )
+    monkeypatch.setattr(
+        app_module,
+        "create_phase6_collections",
+        lambda client: (object(), object()),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "create_file_storage",
+        lambda: object(),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "_create_embedder",
+        lambda: object(),
+    )
+
+    application = app_module.create_app()
+
+    with TestClient(application) as client:
+        ready = client.get("/api/v1/health/ready")
+
+        assert ready.status_code == 503
+        assert ready.json() == {
+            "status": "degraded",
+            "dependencies": {
+                "postgres": "error",
+                "chroma": "ok",
+            },
+        }
+
+        live = client.get("/api/v1/health/live")
+
+        assert live.status_code == 200
+        assert live.json() == {"status": "ok"}
